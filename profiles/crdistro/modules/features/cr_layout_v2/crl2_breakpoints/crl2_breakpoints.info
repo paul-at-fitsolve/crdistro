@@ -1,0 +1,13 @@
+name = CRL2 Breakpoints
+description = Exposes the breakpoints defined via the breakpoints module as Drupal JavaScript settings
+core = 7.x
+package = CR Layout V2
+version = 7.x-0.03
+project = crl2_breakpoints
+dependencies[] = breakpoints
+features[features_api][] = api:1
+no autodetect = 1
+project path = sites/all/modules/features/cr_layout_v2/
+scripts[] = js/vendor/enquire.min.js
+scripts[] = js/crl2.breakpoints.ios7fix.min.js
+scripts[] = js/crl2.breakpoints.min.js

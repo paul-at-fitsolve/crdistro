@@ -1,0 +1,7 @@
+name = CRL2 Panel styles
+description = Provides panels region and pane styles for the mobile-first, responsive grid framework (Bootstrap 3).
+core = 7.x
+package = CR Layout V2
+version = 7.x-0.01
+project = crl2_panel_styles
+features[features_api][] = api:1

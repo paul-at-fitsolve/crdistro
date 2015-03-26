@@ -1,0 +1,49 @@
+diff --git a/public/sites/all/modules/contrib/picture/picture.module b/public/sites/all/modules/contrib/picture/picture.module
+index 54f53c9..a229634 100644
+--- a/public/sites/all/modules/contrib/picture/picture.module
++++ b/public/sites/all/modules/contrib/picture/picture.module
+@@ -427,10 +427,17 @@ function picture_field_formatter_settings_form($field, $instance, $view_mode, $f
+ function picture_get_mapping_options() {
+   $picture_mapping_options = array();
+   $picture_mappings = picture_mapping_load_all();
++  $cache_breakpoint_groups = &drupal_static('picture_breakpoint_groups', array());
++
++  // Cache all breakpoints for us
++  if(empty($cache_breakpoint_groups)) {
++    $cache_breakpoint_groups = breakpoints_breakpoint_group_load();
++  }
++
+   if ($picture_mappings && !empty($picture_mappings)) {
+     foreach ($picture_mappings as $machine_name => $picture_mapping) {
+-      $breakpoint_group = breakpoints_breakpoint_group_load($picture_mapping->breakpoint_group);
+-      if ($breakpoint_group) {
++      if (!empty($cache_breakpoint_groups[$picture_mapping->breakpoint_group])) {
++        $breakpoint_group = $cache_breakpoint_groups[$picture_mapping->breakpoint_group];
+         $picture_mapping_options[$machine_name] = $breakpoint_group->name;
+       }
+     }
+@@ -672,6 +679,13 @@ function theme_picture_formatter_colorbox($variables) {
+  * @ingroup themeable
+  */
+ function theme_picture($variables) {
++  $cache_breakpoints = &drupal_static('picture_breakpoints', array());
++
++  // Cache all breakpoints for us
++  if(empty($cache_breakpoints)) {
++    $cache_breakpoints =  breakpoints_breakpoint_load_by_fullkey();
++  }
++
+   // Make sure that width and height are proper values
+   // If they exists we'll output them
+   // @see http://www.w3.org/community/respimg/2012/06/18/florians-compromise/
+@@ -695,8 +709,8 @@ function theme_picture($variables) {
+ 
+   // All breakpoints and multipliers.
+   foreach ($variables['breakpoints'] as $breakpoint_name => $multipliers) {
+-    $breakpoint = breakpoints_breakpoint_load_by_fullkey($breakpoint_name);
+-    if ($breakpoint) {
++    if (!empty($cache_breakpoints[$breakpoint_name])) {
++      $breakpoint = $cache_breakpoints[$breakpoint_name];
+       $new_sources = array();
+       switch (variable_get('picture_implementation', PICTURE_IMPLEMENTATION_DEFAULT)) {
+         case PICTURE_IMPLEMENTATION_PICTUREFILL:

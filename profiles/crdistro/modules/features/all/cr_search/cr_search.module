@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the cr_search feature.
+ */
+
+include_once 'cr_search.features.inc';

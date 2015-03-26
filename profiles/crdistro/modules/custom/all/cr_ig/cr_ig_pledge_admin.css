@@ -1,0 +1,12 @@
+input[id^="pledge-age"] {
+  width: 30px;
+}
+
+input[id^="pledge-name"] {
+  width: 150px;
+}
+
+input[id^="pledge-pledge"] {
+  width: 450px;
+}
+

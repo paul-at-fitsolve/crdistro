@@ -1,0 +1,339 @@
+<?php
+
+/**
+ * Returns the web services base URL for the current environment.
+ *
+ * Currently returns https URLs for staging and production only, as self-
+ * signed certificates are in use on dev and some clients will not connect.
+ *
+ * @param $auth
+ *   If TRUE, returns URLs including authentication details.
+ */
+function cr_webservices_base_url($auth = TRUE) {
+  switch (APPLICATION_ENV) {
+    case 'local':
+      $protocol = 'http://';
+      $domain = 'webservice.local';
+      break;
+
+    case 'development':
+    case 'cam-development':
+      $protocol = 'http://';
+      $domain = 'dev-webservices-v2.comicrelief.com';
+      break;
+
+    case 'production':
+    case 'cam-production':
+      $protocol = 'https://';
+      $domain = 'webservices-v2.comicrelief.com';
+      break;
+
+    default:
+      $protocol = 'https://';
+      $domain = 'staging-webservices-v2.comicrelief.com';
+  }
+
+  if ($auth) {
+    $url = $protocol . 'crd7:70c040501fe3d0eb077592ea0fb241b8@' . $domain . '/';
+  }
+  else {
+    $url = $protocol . $domain . '/';
+  }
+
+  return $url;
+}
+
+/**
+ * Implements hook_default_wsclient_service().
+ */
+function cr_webservices_default_wsclient_service() {
+  $service = new WSClientServiceDescription();
+  $service->name = 'cr_marketing_preferences';
+  $service->label = 'Comic Relief web services';
+  $service->url = cr_webservices_base_url();
+  $service->type = 'rest';
+  $service->settings['formatter'] = new HttpClientCompositeFormatter();
+  $service->operations['marketing_general'] = array(
+    'label' => 'Subscribe to a mailing list as a basic user',
+    'url' => 'marketing/preferences',
+    'type' => 'POST',
+    'parameter' => array(
+      'firstName' => array(
+        'type' => 'text',
+        'label' => 'First name',
+      ),
+      'email' => array(
+        'type' => 'text',
+        'label' => 'Email address',
+      ),
+      'source' => array(
+        'type' => 'text',
+        'label' => 'Source ID',
+      ),
+      'sourceUrl' => array(
+        'type' => 'text',
+        'label' => 'Source URL',
+      ),
+      'campaign' => array(
+        'type' => 'text',
+        'label' => 'Campaign ID',
+      ),
+      'lists' => array(
+        'type' => 'array',
+        'label' => 'Lists to subscribe to',
+      ),
+      'sendEmail' => array(
+        'type' => 'bool',
+        'label' => 'Send a welcome email',
+      ),
+
+      // These parameters are used in the update call
+      'tid' => array(
+        'type' => 'integer',
+        'label' => 'Transaction ID to update',
+      ),
+      // firstName is already set above
+      'postcode' => array(
+        'type' => 'text',
+        'label' => 'Postcode',
+      ),
+      'group_affiliation' => array(
+        'type' => 'text',
+        'label' => 'Organisation name associated with this subscriber',
+      ),
+    ),
+    'result' => array(
+      'type' => 'text',
+      'label' => 'Result',
+    ),
+  );
+  $service->operations['marketing_teacher'] = array(
+    'label' => 'Subscribe to a mailing list as a teacher',
+    'url' => 'marketing/teachers',
+    'type' => 'POST',
+    'parameter' => array(
+      'email' => array(
+        'type' => 'text',
+        'label' => 'Email address',
+      ),
+      'source' => array(
+        'type' => 'text',
+        'label' => 'Source ID',
+      ),
+      'sourceUrl' => array(
+        'type' => 'text',
+        'label' => 'Source URL',
+      ),
+      'campaign' => array(
+        'type' => 'text',
+        'label' => 'Campaign ID',
+      ),
+      'lists' => array(
+        'type' => 'array',
+        'label' => 'Lists to subscribe to',
+      ),
+      'edDirectID' => array(
+        'type' => 'integer',
+        'label' => 'edDirect school ID, or 0 for manual entry',
+      ),
+      'schoolContactDetails' => array(
+        'type' => 'array',
+        'label' => 'School address',
+      ),
+      'phase' => array(
+        'type' => 'text',
+        'label' => 'School phase (EY/PY/SY/FE)',
+      ),
+      'role' => array(
+        'type' => 'text',
+        'label' => 'Job title',
+      ),
+    ),
+    'result' => array(
+      'type' => 'text',
+      'label' => 'Result',
+    ),
+  );
+  $service->operations['donate_giftaid'] = array(
+    'label' => 'Mark a mobile donation for Gift Aid',
+    'url' => 'donation/gift-aid',
+    'type' => 'POST',
+    'parameter' => array(
+      'email' => array(
+        'type' => 'text',
+        'label' => 'Email address',
+      ),
+      'mobile' => array(
+        'type' => 'text',
+        'label' => 'Mobile number',
+      ),
+      'giftAid' => array(
+        'type' => 'boolean',
+        'label' => 'Gift Aid flag',
+      ),
+      'address' => array(
+        'type' => 'array',
+        'label' => 'Address',
+      ),
+      'source' => array(
+        'type' => 'text',
+        'label' => 'Source ID',
+      ),
+      'sourceUrl' => array(
+        'type' => 'text',
+        'label' => 'Source URL',
+      ),
+      'campaign' => array(
+        'type' => 'text',
+        'label' => 'Campaign ID',
+      ),
+    ),
+    'result' => array(
+      'type' => 'result',
+      'label' => 'Save result',
+    ),
+  );
+  $service->operations['donate_fundraiser'] = array(
+    'label' => "Save a fundraiser's details",
+    'url' => 'donation/fundraiser',
+    'type' => 'POST',
+    'parameter' => array(
+      'option' => array(
+        'type' => 'text',
+        'label' => 'Fundraiser type',
+      ),
+      'email' => array(
+        'type' => 'text',
+        'label' => 'Email address',
+      ),
+      // Next 3 are sent by general and corporate fundraisers only.
+      'whatYouDid' => array(
+        'type' => 'text',
+        'label' => 'What you did',
+      ),
+      'permission' => array(
+        'type' => 'boolean',
+        'label' => 'Contact permission flag',
+      ),
+      'resources' => array(
+        'type' => 'array',
+        'label' => 'Resources',
+      ),
+      // Next 4 are sent by schools fundraisers only.
+      'edDirectID' => array(
+        'type' => 'integer',
+        'label' => 'edDirect school ID, or 0 for manual entry',
+      ),
+      'schoolContactDetails' => array(
+        'type' => 'array',
+        'label' => 'School address',
+      ),
+      'phase' => array(
+        'type' => 'text',
+        'label' => 'School phase (EY/PY/SY/FE)',
+      ),
+      'role' => array(
+        'type' => 'text',
+        'label' => 'Job title',
+      ),
+      // Next 1 is sent by corporate fundraisers only.
+      'group_affiliation' => array(
+        'type' => 'text',
+        'label' => 'Organisation name associated with this fundraiser',
+      ),
+    ),
+    'result' => array(
+      'type' => 'result',
+      'label' => 'Save result',
+    ),
+  );
+  $services[$service->name] = $service;
+
+  return $services;
+}
+
+/**
+ * Implements hook_wsclient_endpoint_types_alter().
+ */
+function cr_webservices_wsclient_endpoint_types_alter(&$data) {
+  $data['rest']['class'] = 'CR_WSClientRESTEndpoint';
+}
+
+/**
+ * A remote endpoint type for invoking REST services, with added debugging facilities.
+ */
+class CR_WSClientRESTEndpoint extends WSClientRESTEndpoint {
+
+  /**
+   * Calls the REST service.
+   *
+   * @param string $operation_name
+   *   The name of the operation to execute.
+   * @param array $arguments
+   *   Arguments to pass to the service with this operation.
+   */
+  public function call($operation_name, $arguments) {
+    $operation = $this->service->operations[$operation_name];
+    $operation_url = isset($operation['url']) ? $operation['url'] : '';
+    // Replace argument patterns in the operation URL.
+    foreach ($arguments as $key => $value) {
+      if (strpos($operation_url, '@' . $key) !== FALSE) {
+        $operation_url = str_replace('@' . $key, $value, $operation_url);
+        unset($arguments[$key]);
+      }
+    }
+    $client = $this->client();
+    $type = isset($operation['type']) ? $operation['type'] : 'GET';
+    $data = NULL;
+    if (isset($operation['data'])) {
+      $data = $arguments[$operation['data']];
+      unset($arguments[$operation['data']]);
+    }
+    try {
+      // We deliberately override the stored base URL here, as cron runs/cache
+      // clears at Acquia have the wrong environment set, so we end up with
+      // the wrong base URL in the cache.
+      $service_url = cr_webservices_base_url();
+      $response = $client->execute(new CR_HttpClientRequest($service_url . $operation_url, array(
+        'method' => $type,
+        'parameters' => $arguments,
+        'data' => $data,
+      )));
+      return $response;
+    }
+    catch (HttpClientException $e) {
+      watchdog('cr_webservices', 'Error invoking the REST service %name, operation %operation: %error: %response', array('%name' => $this->service->label, '%operation' => $operation_name, '%error' => $e->getMessage(), '%response' => $e->getResponse()->body));
+      throw new WSClientException('Error invoking the REST service %name, operation %operation: %error', array('%name' => $this->service->label, '%operation' => $operation_name, '%error' => $e->getMessage()));
+    }
+  }
+
+}
+
+/**
+ * Extend HttpClientRequest to handle keyed parameter arrays correctly.
+ */
+class CR_HttpClientRequest extends HttpClientRequest {
+
+  /**
+   * Returns the url taken the parameters into account.
+   */
+  public function url() {
+    if (empty($this->parameters)) {
+      return $this->url;
+    }
+    $total = array();
+    foreach ($this->parameters as $k => $v) {
+      if (is_array($v)) {
+        foreach ($v as $vk => $va) {
+          $total[] = HttpClient::urlencode_rfc3986($k) . "[" . HttpClient::urlencode_rfc3986($vk) . "]=" . HttpClient::urlencode_rfc3986($va);
+        }
+      }
+      else {
+        $total[] = HttpClient::urlencode_rfc3986($k) . "=" . HttpClient::urlencode_rfc3986($v);
+      }
+    }
+    $out = implode("&", $total);
+    return $this->url . '?' . $out;
+  }
+
+}

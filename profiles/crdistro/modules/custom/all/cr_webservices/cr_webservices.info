@@ -1,0 +1,6 @@
+name = Web services
+description = Provides connectivity to external web services
+core = 7.x
+package = "Comic Relief"
+php = 5.2.4
+dependencies[] = wsclient_rest

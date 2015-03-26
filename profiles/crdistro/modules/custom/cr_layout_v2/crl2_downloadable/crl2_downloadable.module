@@ -1,0 +1,367 @@
+<?php
+  /**
+   * @file
+   * Code for the CR Layout v2 compatible Downloadables.
+   */
+
+  define('CRL2_DOWNLOADABLE_ERROR', 'Render: Could not fetch downloadable'
+    . ' with machine name: @machine_name');
+  define('CRL2_DOWNLOADABLE_ADMIN_URL', 'admin/structure/downloadable');
+
+  /**
+   * Implements hook_entity_info().
+   */
+  function crl2_downloadable_entity_info() {
+
+    $return = array(
+      'crl2_downloadable' => array(
+        'label' => t('Downloadable'),
+        'plural label' => t('Downloadables'),
+        'entity class' => 'Entity',
+        'controller class' => 'EntityAPIControllerExportable',
+        // So that Views can access it
+        'views controller class' => 'EntityDefaultViewsController',
+        'base table' => 'crl2_downloadable',
+        'fieldable' => TRUE,
+        'exportable' => FALSE,
+        'entity keys' => array(
+          // So that external code can easily grab this info (key => db field)
+          // e.g. EntityReference module
+          'id' => 'id',
+          'name' => 'name',
+          'label' => 'label'
+        ),
+        'module' => 'crl2_downloadable',
+        'access callback' => 'crl2_downloadable_access',
+        // Enable the entity API's admin UI.
+        'admin ui' => array(
+          'path' => CRL2_DOWNLOADABLE_ADMIN_URL,
+          'file' => 'crl2_downloadable.admin.inc',
+        ),
+        'bundles' => array(),
+        'view modes' => array(
+          'full' => array(
+            'label' => t('full downloadable'),
+            'custom settings' => FALSE,
+          ),
+        ),
+      ),
+    );
+
+    return $return;
+  }
+
+  /**
+   * Implements hook_permission()
+   */
+  function crl2_downloadable_permission() {
+    return array(
+      'administer downloadable' => array(
+        'title' => t('Administer downloadable Entities'),
+      ),
+    );
+  }
+
+  /**
+   * Access callback for the entity API.
+   *
+   * @param $op
+   *   The operation being performed. One of 'view', 'update', 'create', 'delete'
+   *   or just 'edit' (being the same as 'create' or 'update').
+   * @param $profile
+   *   (optional) A profile to check access for. If nothing is given, access for
+   *   all profiles is determined.
+   * @param $account
+   *   (optional) The user to check for. Leave it to NULL to check for the global user.
+   *
+   * @return boolean
+   *   Whether access is allowed or not.
+   */
+  function crl2_downloadable_access($op, $profile = NULL, $account = NULL) {
+    if (user_access('administer downloadable', $account)) {
+      return TRUE;
+    }
+    return FALSE;
+  }
+
+  /**
+   * Implements hook_info()
+   */
+  function crl2_downloadable_token_info() {
+
+    // Token keys
+    $types['dl'] = array(
+      'name' => t('Downloadable'),
+      'description' => t('Tokens which resolve into downloadable info'),
+    );
+
+    // Tokens
+    $downloadable['type'] = array(
+      'name' => t('The downloadable type'),
+      'description' => t('The downloadable type. For files this ' .
+      'is the extension. For links this is empty.'),
+    );
+
+    $downloadable['size'] = array(
+      'name' => t('The downloadable size'),
+      'description' => t('The downloadable size. Resolves to the most human ' .
+      'readable size e.g. \'321 KB\' or \'6.5 MB\'.'),
+    );
+
+    $downloadable['title'] = array(
+      'name' => t('Render the downloadable name'),
+      'description' => t('The downloadable\'s title (human readable name).'),
+    );
+
+    $downloadable['link'] = array(
+      'name' => t('Render the downloadable as a link'),
+      'description' => t('A basic link to the file using the human readable name'
+        . ' as its link text.'),
+    );
+
+    $downloadable['url'] = array(
+      'name' => t('Render the downloadable\'s url only'),
+      'description' => t('The url of the downloadable file, this will be the CDN'
+        . ' location of the file if the file is local and a CDN is configured.'),
+    );
+
+    return array(
+      'types' => $types,
+      'tokens' => array(
+        'dl' => $downloadable,
+      ),
+    );
+  }
+
+  /**
+   * Implements hook_tokens()
+   * Tokens added to content using a type prefix and machine name
+   * eg: [dl:token_type:machine_name:optional_modifier].
+   */
+  function crl2_downloadable_tokens($type, $tokens, array $data = array(), array $options = array()) {
+    $replacements = array();
+    $sanitize = !empty($options['sanitize']) ? $options['sanitize'] : TRUE;
+
+    if ($type !== 'dl') {
+      return $replacements;
+    }
+
+    foreach($tokens as $name => $original) {
+      $tokens = explode(':', $name);
+
+      switch($tokens[1]) {
+        // [dl:machine_name:type:uppercase|lowercase|camelcase]
+        case 'type':
+          $replacement_value = isset($data['type']) ? $data['type'] : '';
+
+          if (ctype_digit($tokens[0])) {
+            continue;
+          }
+          if (empty($replacement_value)) {
+            $machine_name = $tokens[0];
+            if ($download = crl2_downloadable_get_download_meta($machine_name)) {
+              $replacement_value = isset($download->type) ? $download->type : '';
+            }
+          }
+
+          if (empty($replacement_value)) {
+            continue;
+          }
+          // Check for case parameter
+          if (isset($tokens[2])) {
+            switch($tokens[2]) {
+              case 'lowercase':
+                $replacement_value = strtolower($replacement_value);
+                break;
+              case 'camelcase':
+                $replacement_value = ucwords($replacement_value);
+                break;
+              case 'uppercase':
+                $replacement_value = strtoupper($replacement_value);
+                break;
+            }
+          }
+          else {
+            $replacement_value = strtoupper($replacement_value);
+          }
+          $replacements[$original] =
+            $sanitize ? check_plain($replacement_value) : $replacement_value;
+          break;
+
+        // [dl:machine_name:size]
+        // [dl:machine_name:size:n] = precision (int)
+        case 'size':
+          $replacement_value = isset($data['size']) ? $data['size'] : '';
+          if (empty($replacement_value)) {
+            $machine_name = $tokens[0];
+            if ($download = crl2_downloadable_get_download_meta($machine_name)) {
+              $replacement_value = isset($download->filesize) ?
+                $download->filesize : '';
+            }
+          }
+
+          // Check for precision integer
+          if (isset($tokens[2]) && ctype_digit($tokens[2])) {
+            $replacement_value =
+              crl2_downloadable_bytes_to_size_1024($replacement_value, $tokens[2]);
+          }
+          else {
+            $replacement_value = crl2_downloadable_bytes_to_size_1024($replacement_value, 2);
+          }
+
+          $replacements[$original] =
+            $sanitize ? check_plain($replacement_value) : $replacement_value;
+          break;
+
+        // [dl:machine_name:link]
+        case 'link':
+          if (!ctype_digit($tokens[0])) {
+            $machine_name = $tokens[0];
+            if ($download = crl2_downloadable_get_download_meta($machine_name)) {
+              $replacement_value = crl2_downloadable_render_link($download);
+            }
+
+            if ($replacement_value === FALSE) {
+              watchdog('crl2_downloadable', CRL2_DOWNLOADABLE_ERROR,
+                array('@machine_name' => $machine_name), WATCHDOG_ERROR);
+            }
+            else {
+              $replacement_value = $sanitize ? filter_xss($replacement_value) : $replacement_value;
+              // Fix issue with protocal relative URLs: 
+              $replacements[$original] = preg_replace('/(?<=href=\")(.*\/\/\/)/', '//', $replacement_value);
+            }
+          }
+          break;
+
+        // [dl:machine_name:title:uppercase|lowercase|camelcase]
+        case 'title':
+          $replacement_value = isset($data['title']) ? $data['title'] : '';
+          if (empty($replacement_value)) {
+            $machine_name = $tokens[0];
+            if ($download = crl2_downloadable_get_download_meta($machine_name)) {
+              $replacement_value = $download->title;
+
+              // Check for case parameter
+              if (isset($tokens[2])) {
+                switch($tokens[2]) {
+                  case 'lowercase':
+                    $replacement_value = strtolower($replacement_value);
+                    break;
+                  case 'camelcase':
+                    $replacement_value = ucwords($replacement_value);
+                    break;
+                  case 'uppercase':
+                    $replacement_value = strtoupper($replacement_value);
+                    break;
+                }
+              }
+
+              $replacements[$original] =
+                $sanitize ? check_plain($replacement_value) : $replacement_value;
+            }
+          }
+          break;
+
+        // [dl:machine_name:url]
+        // To give us a bit of flexibility, this simply outputs the url to the file
+        case 'url':
+          if (!ctype_digit($tokens[0])) {
+            $machine_name = $tokens[0];
+            if ($download = crl2_downloadable_get_download_meta($machine_name)) {
+              $replacement_value = isset($download->url) ? $download->url : '';
+            }
+
+            if (empty($replacement_value)) {
+              watchdog('crl2_downloadable', CRL2_DOWNLOADABLE_ERROR,
+                array('@machine_name' => $machine_name), WATCHDOG_ERROR);
+            }
+            else {
+              $replacement_value = $sanitize ? filter_xss($replacement_value) : $replacement_value;
+              // Fix issue with protocal relative URLs: 
+              $replacements[$original] = preg_replace('/(\/\/\/)/', '//', $replacement_value);
+            }
+          }
+          break;
+      }
+    }
+
+    return $replacements;
+  }
+
+  /**
+   * Return object for displaying download links and metadata
+   * @param $machine_name
+   * @return boolean| object $metadata
+   */
+  function crl2_downloadable_get_download_meta($machine_name) {
+    $entity = entity_load_single('crl2_downloadable', $machine_name);
+    if (empty($entity)) {
+      return FALSE;
+    }
+
+    $metadata = new stdClass();
+    $metadata->title = $entity->label;
+
+    // If Url is empty then get the local file info
+    if (empty($entity->url) && $entity->file_upload != 0) {
+      if (($file = file_load($entity->file_upload)) !== FALSE) {
+        $metadata->url = file_create_url($file->uri);
+        $metadata->filesize = $file->filesize;
+        $metadata->uri  = $file->uri;
+
+        $file->type = substr($file->filename, strrpos($file->filename, '.') + 1);
+        $metadata->type = $file->type;
+      }
+    } else {
+      $metadata->url = $entity->url;
+      $metadata->type  = substr($entity->url, strrpos($entity->url, '.') + 1);
+    }
+
+    return $metadata;
+  }
+
+  /**
+   * Returns a downloadable link from the downloadables metadata
+   *
+   * @param object $download
+   *   The downloadable object
+   * @return
+   *   The downloadable link
+   */
+  function crl2_downloadable_render_link($download) {
+    $output = '';
+    if (empty($download->url)) {
+      return FALSE;
+    }
+    $title = !empty($download->title) ? $download->title : t('Download');
+
+    $output = l(
+      $title,
+      $download->url,
+      array(
+        'html' => TRUE,
+        'attributes' => array(
+          'class' => array('download'),
+          'target' => '_blank',
+        ),
+        'external' => TRUE,
+        'absolute' => TRUE,
+      )
+    );
+
+    // Reduce 3 slashes to 2 before returning the link as IE can't handle it
+    $output = preg_replace('/(?<=href=\")(.*\/\/\/)/', '//', $output);
+
+    return $output;
+  }
+
+  /**
+   * Helper to convert bytes to human readable output
+   */
+  function crl2_downloadable_bytes_to_size_1024($bytes, $precision = 2) {
+    // human readable format -- powers of 1024
+    $unit = array('B','KB','MB','GB','TB','PB','EB');
+
+    return @round($bytes / pow(1024, ($i = floor(log($bytes, 1024)))), $precision)
+      . ' ' . $unit[$i];
+  }

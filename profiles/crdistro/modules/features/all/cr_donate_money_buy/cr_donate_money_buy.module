@@ -1,0 +1,104 @@
+<?php
+
+/**
+ * Implements hook_entity_info_alter()
+ */
+function cr_donate_money_buy_entity_info_alter(&$entity_info) {
+  $entity_info['fieldable_panels_pane']['bundles']['donate_money_buy'] = array(
+    'label' => t('Donate money buy'),
+    'admin' => array(
+      'path' => 'admin/structure/fieldable-panels-panes/manage/' .
+        '%fieldable_panels_panes_type',
+      'bundle argument' => 4,
+      'real path' => 'admin/structure/fieldable-panels-panes/manage/' .
+        'donate-money-buy',
+      'access arguments' => array('administer fieldable panels panes'),
+    ),
+  );
+  $entity_info['fieldable_panels_pane']['bundles']['money_buy'] = array(
+    'label' => t('Money Buy'),
+    'pane top level' => TRUE, // set to true to make this show as a top level icon
+    'pane icon' => '/path/to/custom/icon/for/this/pane.png',
+    'admin' => array(
+      'path' => 'admin/structure/fieldable-panels-panes/manage/' .
+        '%fieldable_panels_panes_type',
+      'bundle argument' => 4,
+      // Note that this has all _ replaced with - from the bundle name.
+      'real path' => 'admin/structure/fieldable-panels-panes/manage/money_buy',
+      'access arguments' => array('administer fieldable panels panes'),
+    ),
+  );
+  $entity_info['fieldable_panels_pane']['bundles']['money_buy_fundraiser'] = array(
+    'label' => t('Money Buy Fundraiser Pods'),
+    'pane top level' => TRUE, // set to true to make this show as a top level icon
+    'pane icon' => '/path/to/custom/icon/for/this/pane.png',
+    'admin' => array(
+      'path' => 'admin/structure/fieldable-panels-panes/manage/' .
+        '%fieldable_panels_panes_type',
+      'bundle argument' => 4,
+      // Note that this has all _ replaced with - from the bundle name.
+      'real path' => 'admin/structure/fieldable-panels-panes/manage/' .
+        'money_buy_fundraiser',
+      'access arguments' => array('administer fieldable panels panes'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_default_field_instances_alter()
+ *
+ * Enforces different image presets for money buy images for CR and SR.
+ */
+function cr_donate_money_buy_field_default_field_instances_alter(&$instances) {
+  if (isset($instances['fieldable_panels_pane-donate_money_buy-field_image'])) {
+    $preset = &$instances['fieldable_panels_pane-donate_money_buy-field_image']['display']['default']['settings']['picture_group'];
+    $fallback_image_style = &$instances['fieldable_panels_pane-donate_money_buy-field_image']['display']['default']['settings']['fallback_image_style'];
+
+    $campaign_id = variable_get('cr_donate_money_buy_cid', CR_CAMPAIGN_ID);
+    switch (substr($campaign_id, 0, 2)) {
+      case 'CR':
+        $preset = 'grid_8';
+        $fallback_image_style = 'grid-8-normal';
+        break;
+
+      case 'SR':
+        $preset = 'grid_6';
+        break;
+    }
+  }
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function cr_donate_money_buy_ctools_plugin_directory($module, $plugin) {
+  if ($module == 'ctools' && !empty($plugin)) {
+    return "plugins/$plugin";
+  }
+}
+
+/**
+ * Implements of hook_theme()
+ */
+function cr_donate_money_buy_theme() {
+  return array(
+    'cr_donate_money_buy_buttons' => array(
+      'variables' => array('amounts' => array()),
+      'template' => 'cr-donate-money-buy-buttons',
+    ),
+  );
+}
+
+/**
+ * Implements hook_preprocess_field()
+ */
+function cr_donate_money_buy_preprocess_field(&$variables) {
+  $field_name = $variables['element']['#field_name'];
+  $field_type = $variables['element']['#field_type'];
+  $bundle     = $variables['element']['#bundle'];
+
+  if ($bundle === 'donate_money_buy' && $field_name === 'field_amount'
+    && $field_type === 'number_integer') {
+    $variables['classes_array'][] = 'cr-donate-moneybuy-amount';
+  }
+}

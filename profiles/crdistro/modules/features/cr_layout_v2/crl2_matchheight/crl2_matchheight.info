@@ -1,0 +1,13 @@
+name = CRL2 MatchHeight
+description = Provides the site wide match height script and triggers it by breakpoint.
+core = 7.x
+package = CR Layout V2
+php = 5.2.4
+version = 7.x-0.01
+project = crl2_matchheight
+dependencies[] = crl2_breakpoints
+scripts[] = js/vendor/jquery.matchHeight-min.js
+scripts[] = js/crl2_matchheight.min.js
+features[features_api][] = api:1
+no autodetect = 1
+project path = sites/all/modules/features/cr_layout_v2

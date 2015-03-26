@@ -1,0 +1,21 @@
+<?php
+/**
+ * @file
+ *
+ */
+
+/**
+ * Implements hook_install().
+ */
+function crl2_panel_styles_install() {
+  // Set panel style extra classes
+  variable_set('panel_style_extra_classes', array("_none"=>'None'));
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function crl2_panel_styles_uninstall() {
+  // delete panel style extra classes
+  variable_del('panel_style_extra_classes');
+}

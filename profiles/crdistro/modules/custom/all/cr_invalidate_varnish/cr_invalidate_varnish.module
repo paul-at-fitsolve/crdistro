@@ -1,0 +1,573 @@
+<?php
+/**
+ * @file
+ * .module file for cr_invalidate_varnish module
+ *
+ * This file only contains hook implementations,  all other functions can be
+ * found in cr_invalidate_varnish.admin.inc
+ *
+ * Author: Graham Utton
+ */
+
+define('CR_INVALIDATE_VARNISH_PAGE_CALLBACK', 'cr_invalidate_varnish_request_invalidations_page');
+
+/**
+ * Implements hook_menu().
+ */
+function cr_invalidate_varnish_menu() {
+  $items['admin/content/varnish_invalidation'] = array(
+    'title' => 'Invalidate Varnish urls',
+    'description' => 'Request varnish cached pages to be invalidated',
+    'page callback' => CR_INVALIDATE_VARNISH_PAGE_CALLBACK,
+    'access arguments' => array('invalidate urls in varnish'),
+  );
+
+  $items['admin/config/services/varnish_invalidation'] = array(
+    'title' => 'Configure Varnish invalidation',
+    'description' => 'Configure endpoint, limits etc of Varnish invalidation',
+    'page arguments' => array('cr_invalidate_varnish_config_form'),
+    'page callback' => 'drupal_get_form',
+    'access arguments' => array('configure varnish invalidation'),
+    'file' => 'cr_invalidate_varnish.admin.inc',
+  );
+
+  return $items;
+}
+
+/*
+ * Implements hook admin_menu_output_build
+ */
+function cr_invalidate_varnish_admin_menu_output_build(&$content) {
+  if (isset($content['icon'])) {
+    $content['icon']['icon']['cr_invalidate_varnish'] = array(
+      '#title' => t('Invalidate varnish'),
+      '#access' => user_access('invalidate urls in varnish'),
+      '#href' => 'admin/content/varnish_invalidation',
+    );
+  }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function cr_invalidate_varnish_permission() {
+  return array(
+    'invalidate urls in varnish' => array(
+      'title' => t('Invalidate varnish urls'),
+      'description' => t('Perform varnish url invalidations.'),
+    ),
+    'configure varnish invalidation' => array(
+      'title' => t('Configure varnish invalidation'),
+      'description' => t('Configure varnish invalidation settings'),
+    ),
+  );
+}
+
+/**
+ * Checks curl requirements and presents UI for invalidating varnish urls
+ *
+ * @return array
+ *  The request_invalidations form array
+ */
+function cr_invalidate_varnish_request_invalidations_page() {
+  $stubbing_enabled = variable_get('cr_invalidate_varnish_stub_service', 0);
+  if (!function_exists('curl_init')) {
+    if ($stubbing_enabled) {
+      $message = t('Curl library not available, so no requests can be made.
+      However request stubbing is enabled so proceeding with no curl functionality');
+      drupal_set_message($message);
+    }
+    else {
+      return t('CURL library not available. Cannot submit any invalidation requests');
+    }
+  }
+
+  return drupal_get_form('cr_invalidate_varnish_request_invalidations_form');
+}
+
+/**
+ * Form builder to accept invalidation requests and show previous invalidations
+ *
+ * @param array $form
+ *  The request_invalidations form
+ * @param array $form_state
+ *  The request_invalidations form state
+ * @return array
+ *  The request_invalidations form
+ */
+function cr_invalidate_varnish_request_invalidations_form($form, &$form_state) {
+  $form = array();
+
+  if (variable_get('cr_invalidate_varnish_stub_service', 0)) {
+    $message = t('WARNING: Request stubbing is currently enabled, no actual requests will be made');
+    drupal_set_message($message);
+  }
+
+  $form['intro'] = array(
+    '#markup' =>
+      t('Enter urls to invalidate in varnish, one per line.  No need to include http:// or https://
+      at the beginning as varnish will clear urls for both protocols.'),
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
+  );
+
+  $form['config_info'] = array(
+    '#markup' =>
+      t('A maximum of %window_limit urls can be invalidated in any %window_duration second window',
+        array(
+          '%window_limit' =>  variable_get('cr_invalidate_varnish_window_limit', 5),
+          '%window_duration' => variable_get('cr_invalidate_varnish_window_duration', 300),
+        )
+      ),
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
+  );
+
+  $form['invalidations'] = array(
+    '#title' => t('Invalidation requests'),
+    '#type' => 'textarea',
+    '#description' =>
+      t('Enter urls to invalidate, one per line, no need to include http:// or https://'),
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit')
+  );
+
+  $form['existing_validations'] = cr_invalidate_varnish_get_existing_inv_requests_table();
+
+  return $form;
+}
+
+/**
+ * Validation handler for request_invalidations form
+ *
+ * @param array $form
+ *  The request_invalidations form
+ * @param $form_state
+ *  The request_invalidations form state
+ */
+function cr_invalidate_varnish_request_invalidations_form_validate($form, &$form_state) {
+  $invalidation_urls = $form_state['values']['invalidations'];
+
+  // invalidations value is currently one long string.  Split into array
+  // accounting for varying platform end of line formats
+  $invalidation_urls = preg_split('/(\r\n|\n|\r)/', $invalidation_urls);
+
+  // trim urls, remove blank entries
+  $invalidation_urls = array_filter(array_map('trim', $invalidation_urls));
+
+  // key the array by invalidation url, to help with validation feedback
+  // this also has the effect of removing duplicates
+  $invalidation_urls = array_combine($invalidation_urls, $invalidation_urls);
+
+  // ensure protocol is present, used for PHP's built in validation
+  array_walk($invalidation_urls, 'cr_invalidate_varnish_ensure_protocol');
+
+  // validate url format
+  $invalidation_urls = filter_var_array($invalidation_urls, FILTER_VALIDATE_URL);
+
+  $invalid_invalidations = array();
+  foreach ($invalidation_urls as $key => $valid) {
+    if (!$valid) {
+      $invalid_invalidations[] = $key;
+    }
+  }
+
+  if (!empty($invalid_invalidations)) {
+    $variables = array(
+      'items' =>  $invalid_invalidations,
+      'type'  => 'ul'
+    );
+
+    $error_message = t('The following urls are not valid:') . '<br />';
+    $error_message .= theme('item_list', $variables);
+    form_set_error('invalidations', $error_message);
+    return;
+  }
+
+  // Remove any protocols as varnish will invalidate both http and https
+  // for any url passed so including protocol will cause key to not be found
+  array_walk($invalidation_urls, 'cr_invalidate_varnish_remove_protocol');
+
+  // If validation passes, store the invalidation request in their array form back
+  // into the $form_state so the submit handler need not do the same conversion
+  $form_state['values']['invalidations'] = $invalidation_urls;
+}
+
+/**
+ * Helper function to add http:// protocol to a url if missing
+ * @param string $invalidation
+ *  The url
+ * @return string
+ *  The url after having http:// prefixed (if necessary)
+ */
+function cr_invalidate_varnish_ensure_protocol(&$invalidation) {
+  // Ensure the invalidation starts with a protocol, we do not actually
+  // require this for processing invalidations, but it means we can take
+  // advantage of PHP's build in FILTER_VALIDATE_URL filter below.
+  // Protocols will be stripped at the point we send the invalidation urls
+  // to the invalidation service as it invalidates both http and https versions
+  $pattern = '#^http(s?)://#';
+  if (!preg_match($pattern, $invalidation)) {
+    $invalidation = 'http://' . $invalidation;
+  }
+
+  return $invalidation;
+}
+
+/**
+ * Helper function to strip any protocol from a url
+ *
+ * @param string $invalidation
+ *  The url
+ * @return string
+ *  The url after having any protocol stripped
+ */
+function cr_invalidate_varnish_remove_protocol(&$invalidation) {
+  $pattern = '#^(.*://)?(.*)$#';
+  preg_match($pattern, $invalidation, $matches);
+
+  $invalidation = $matches[2];
+}
+
+/**
+ * Submit handler for request_invalidations form
+ *
+ * For each invalidation request, makes a call to invalidation service
+ * and adds successful requests to the db and updates an array of successful
+ * invalidations, used to determine schedule time for upcoming invalidations
+ *
+ * @param array $form
+ *  The request_invalidations form
+ * @param $form_state
+ *  The request_invalidations form state
+ */
+function cr_invalidate_varnish_request_invalidations_form_submit($form, &$form_state) {
+  // By this point the validation handler has converted the invalidation
+  // requests into an array and stored back into the $form_state
+  $submitted_invalidations = $form_state['values']['invalidations'];
+
+  // Get current invalidations, used to determine schedule time for new invalidations
+  $current_invalidations = cr_invalidate_varnish_get_current_invalidations();
+
+  // foreach $invalidation_request, determine its schedule time and make the
+  // invalidation request.  If the request is successful, add it to the db
+  // and $pending_invalidations array.
+  foreach ($submitted_invalidations as $submitted_invalidation) {
+    $next_schedule_time = cr_invalidate_varnish_get_next_schedule_time($current_invalidations);
+
+    $request_successful = cr_invalidate_varnish_make_request(
+      $submitted_invalidation,
+      $next_schedule_time
+    );
+
+    if (!$request_successful) {
+      // logging and error feedback taken handled in cr_invalidate_varnish_make_request
+      // so now, skip over this invalidation request
+      continue;
+    }
+
+    $msg = 'Invalidation request (@page_url) was scheduled successfully';
+    $msg_vars = array(
+      '@page_url' => $submitted_invalidation,
+    );
+
+    drupal_set_message(t($msg, $msg_vars), 'status');
+    watchdog('cr_invalidate_varnish', $msg, $msg_vars, WATCHDOG_INFO);
+
+    // write this request to the db
+    $invalidation_record = array(
+      'url' => $submitted_invalidation,
+      'request_time' => REQUEST_TIME,
+      'scheduled_time' => $next_schedule_time
+    );
+
+    // if the db write fails, log and show a message, but continue to add
+    // this new invalidation  to the $pending_invalidations array as the
+    // invalidation request has been accepted.
+    if (drupal_write_record('cr_varnish_invalidation', $invalidation_record) === FALSE) {
+      $msg = 'Writing Invalidation request (@page_url) to database encountered an error.';
+      $msg_vars = array(
+        '@page_url' => $invalidation_record['url']
+      );
+
+      drupal_set_message(t($msg, $msg_vars), 'error');
+      watchdog('cr_invalidate_varnish', $msg, $msg_vars, WATCHDOG_ERROR);
+    }
+
+    $current_invalidations[] = $invalidation_record;
+  }
+}
+
+/**
+ * Retrieve current requests (no older than the window duration)
+ *
+ * These are used to determine the schedule time for new requests
+ * New requests will be added to this array as they are sent, as each request
+ * added can have an effect on the schedule time of subsequent requests
+ */
+function cr_invalidate_varnish_get_current_invalidations() {
+  $window_duration = variable_get('cr_invalidate_varnish_window_duration', 300);
+
+  $current_invalidations = db_query('
+    SELECT * FROM {cr_varnish_invalidation}
+    WHERE scheduled_time > :start_of_previous_window',
+    array(':start_of_previous_window' => REQUEST_TIME - $window_duration),
+    array('fetch' => PDO::FETCH_ASSOC)
+  )->fetchAll();
+
+  return $current_invalidations;
+}
+
+/**
+ * Determine the next available schedule time for an invalidation
+ *
+ * Next schedule time is based upon already submitted invalidation requests
+ * and constrains the number that can be requested within a certain time window
+ * according to configuration
+ *
+ * @param array $current_invs
+ *  Existing invalidation requests
+ * @return int
+ *  Unix timestamp of the next available schedule time
+ */
+function cr_invalidate_varnish_get_next_schedule_time($current_invs) {
+  $window_duration = &drupal_static(__FUNCTION__ . '_window_duration');
+  if (!isset($window_duration)) {
+    $window_duration = variable_get('cr_invalidate_varnish_window_duration', 300);
+  }
+
+  $window_limit = &drupal_static(__FUNCTION__ . '_window_limit');
+  if (!isset($window_limit)) {
+    $window_limit = variable_get('cr_invalidate_varnish_window_limit', 5);
+  }
+
+  $buffer_duration = &drupal_static(__FUNCTION__ . '_buffer_duration');
+  if (!isset($buffer_duration)) {
+    $buffer_duration = variable_get('cr_invalidate_varnish_schedule_buffer_duration', 20);
+  }
+
+  // get the schedule time for the most recent submitted invalidation
+  $latest_current_schedule_time = end($current_invs)['scheduled_time'];
+
+  // if the latest schedule time is in the past, then we consider the end of
+  // the latest window to be now (REQUEST_TIME), otherwise the latest schedule
+  // time is set as as end of the latest window.
+  if ($latest_current_schedule_time < REQUEST_TIME) {
+    $end_of_latest_window = REQUEST_TIME;
+  }
+  else {
+    $end_of_latest_window = $latest_current_schedule_time;
+  }
+
+  // Determine how many invalidations we've scheduled within the latest window
+  $current_invs_within_latest_window = array_filter($current_invs,
+    function($inv) use ($window_duration, $end_of_latest_window) {
+      return $inv['scheduled_time'] > ($end_of_latest_window - $window_duration);
+    }
+  );
+
+  // If we are within the invalidation limit for this time window, we can
+  // schedule this invalidation for the same time as the latest existing invalidation
+  // We add a time buffer to avoid multiple synchronous requests and to ensure
+  // the request is in the future in relation to the time on the request service
+  if (count($current_invs_within_latest_window) < $window_limit) {
+    // if schedule time would be in the past then set it to now + buffer
+    if ($latest_current_schedule_time < REQUEST_TIME) {
+      $schedule_time = REQUEST_TIME + $buffer_duration;
+    }
+    else {
+      $schedule_time = $latest_current_schedule_time + $buffer_duration;
+    }
+    return $schedule_time;
+  }
+
+  // Having got here, we know that the last $limit_per_window invalidations have
+  // filled up a $window_time window, and so to schedule this one, we need to
+  // determine the start time of the next window, which is calculated by adding
+  // $window_time to the schedule_time of the first invalidation in the last set
+  // of $limit_per_window
+  $first_current_inv_from_previous_window = array_slice($current_invs, -$window_limit, 1);
+  return $first_current_inv_from_previous_window[0]['scheduled_time'] +
+  $window_duration +
+  $buffer_duration;
+}
+
+/**
+ * Makes requests to invalidation service to invalidate varnish objects
+ *
+ * Request functionality can be stubbed via module configuration for testing
+ *
+ * @param string $invalidation_url
+ *  The url to be invalidated
+ * @param int $next_schedule_time
+ *  Tne unixtime timestamp at which to schedule the invalidation
+ * @return bool
+ *  Whether the request was successful
+ */
+function cr_invalidate_varnish_make_request($invalidation_url, $next_schedule_time) {
+  // if request stubbing has been enabled, we simply return TRUE
+  // to indicate a successful request
+  if (variable_get('cr_invalidate_varnish_stub_service', 0)) {
+    return TRUE;
+  }
+
+  $varnish_ips = &drupal_static(__FUNCTION__ . '_varnish_ips');
+  if (!$varnish_ips) {
+    $varnish_ips = cr_invalidate_varnish_get_varnish_ips();
+  }
+
+  $invalidation_service_endpoint = &drupal_static(__FUNCTION__ . '_varnish_endpoint');
+  if (!$invalidation_service_endpoint) {
+    $invalidation_service_endpoint = variable_get('cr_invalidate_varnish_endpoint', '');
+  }
+
+  // build the endpoint request url
+  $request_options = array(
+    'query' => array(
+      'url'               => $invalidation_url,
+      'invalidation_time' => $next_schedule_time,
+      'varnish_ips'       => $varnish_ips,
+    ),
+    'absolute' => TRUE,
+  );
+
+  $request_url = url($invalidation_service_endpoint, $request_options);
+
+  $ch = curl_init($request_url);
+  $curl_result = curl_exec($ch);
+
+  $request_successful = FALSE;
+  if ($curl_result === FALSE) {
+    $error = curl_error($ch);
+
+    $msg = array(
+      'text'  =>
+        'Invalidation request for @page_url encountered an error.
+         Request url was: @request_url.
+         Curl error (if present) was: !curl_error',
+      'vars'  => array(
+        '@page_url' => $invalidation_url,
+        '@request_url'  => $request_url,
+        '!curl_error' => $error
+      ),
+      'dsm_type' => 'error',
+      'watchdog_severity' => WATCHDOG_ERROR,
+    );
+  }
+  else {
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    if ($http_code === 200) {
+      $request_successful = TRUE;
+
+      $msg = array(
+        'text'  => 'Invalidation request for @page_url was successful.',
+        'vars'  => array(
+          '@page_url' => $invalidation_url,
+        ),
+        'dsm_type' => 'status',
+        'watchdog_severity' => WATCHDOG_INFO,
+      );
+    }
+    else {
+      $msg = array(
+        'text'  =>
+          'Invalidation request for @page_url failed.
+           Http response code was !http_code',
+
+        'vars'  => array(
+          '@page_url' => $invalidation_url,
+          '!http_code'  => $http_code,
+        ),
+        'dsm_type' => 'error',
+        'watchdog_severity' => WATCHDOG_ERROR,
+      );
+    }
+  }
+
+  curl_close($ch);
+
+  watchdog('cr_invalidate_varnish', $msg['text'], $msg['vars'], $msg['watchdog_severity']);
+  drupal_set_message(t($msg['text'], $msg['vars']), $msg['dsm_type']);
+
+  return $request_successful;
+}
+
+/**
+ * Fetch and format varnish ip addresses
+ *
+ * @return array
+ *  array of varnish ip addresses
+ */
+function cr_invalidate_varnish_get_varnish_ips() {
+  $varnish_ips = variable_get('varnish_control_terminal', array());
+
+  // varnish_control_terminal contains space separated varnish IP:PORT strings
+  // split them out into an array and drop the ports
+  $varnish_ips = explode(' ', $varnish_ips);
+  array_walk($varnish_ips, 'cr_invalidate_varnish_strip_port');
+  return $varnish_ips;
+}
+
+/**
+ * Strip port component from varnish addresses
+ *
+ * @param $varnish_address
+ *  The varnish address
+ */
+function cr_invalidate_varnish_strip_port(&$varnish_address) {
+  $varnish_address = trim($varnish_address);
+
+  $pattern = '#^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d{1,5})?$#';
+  if (preg_match($pattern, $varnish_address, $matches)) {
+    $varnish_address = $matches[1];
+  }
+  else {
+    $msg= t('Unable to parse varnish ip address from endpoint: %varnish_endpoint');
+    $msg_vars = array(
+      '%varnish_endpoint' => $varnish_address,
+    );
+
+    drupal_set_message($msg, $msg_vars, 'error');
+    watchdog('cr_invalidate_varnish', $msg, $msg_vars, WATCHDOG_ERROR);
+  }
+}
+
+/**
+ * Create table of existing validation requests
+ *
+ * @return string
+ *  Rendered HTML table of current invalidations
+ */
+function cr_invalidate_varnish_get_existing_inv_requests_table() {
+  $existing_invalidations = db_query(
+    'SELECT * FROM {cr_varnish_invalidation} ORDER BY scheduled_time DESC LIMIT 50',
+    array('fetch' => PDO::FETCH_ASSOC)
+  )->fetchAll();
+
+  $header = array(
+    t('url to invalidate'),
+    t('Requested at'),
+    t('Scheduled for')
+  );
+
+  $rows = array();
+  $date_format = 'D jS M Y - H:i:s';
+  foreach($existing_invalidations as $inv) {
+    $rows[] = array(
+      $inv->url,
+      date($date_format, $inv->request_time),
+      date($date_format, $inv->scheduled_time),
+    );
+  }
+
+  $table = array(
+    '#theme' => 'table',
+    '#header' => $header,
+    '#rows' => $rows,
+  );
+
+  return $table;
+}

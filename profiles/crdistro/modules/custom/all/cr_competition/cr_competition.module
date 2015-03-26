@@ -1,0 +1,367 @@
+<?php
+// Define constants for age querystring parameter, determining data sent
+define('CR_COMPETITION_UNDER16', 'under16');
+define('CR_COMPETITION_OVER16', 'over16');
+define('CR_COMPETITION_EMAIL_TEXT', 'Would you like to be kept informed by ' .
+  'email about what Comic Relief\'s up to?');
+define('CR_COMPETITION_MSG_TYPE', 'competition');
+
+/**
+ * Define competition form
+ * @param mixed $form
+ * @param mixed $form_state
+ * @param mixed $conf array of pre-configured settings
+ * @return mixed $form competition form definition
+ */
+function cr_competition_form($form, &$form_state, $conf) {
+  $form_state['conf'] = $conf;
+
+  $form['competition'] = array(
+    '#type' => 'fieldset',
+    '#attributes' => array(),
+    '#theme' => 'cr_competition_details',
+  );
+
+  $form['age_group'] = array(
+    '#type' => 'value',
+    '#value' => !empty($_GET['age']) ? $_GET['age'] : 'over16',
+  );
+
+  // Desktop or mobile platform flag.
+  $form['platform'] = array(
+    '#type' => 'hidden',
+    '#default_value' => 'desktop',
+  );
+
+  if (!empty($_GET['age']) && $_GET['age'] === 'under16') {
+    $form['competition']['child_name'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Childs full name'),
+      '#maxlength' => 60,
+      '#required' => TRUE,
+    );
+  }
+
+  $form['competition']['first_name'] = array(
+    '#type' => 'textfield',
+    '#title' => t('First name'),
+    '#maxlength' => 50,
+    '#required' => TRUE,
+  );
+
+  $form['competition']['last_name'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Last name'),
+    '#maxlength' => 50,
+    '#required' => TRUE,
+  );
+
+  $form['competition']['email'] = array(
+    '#type' => 'emailfield',
+    '#title' => t('Email address'),
+    '#maxlength' => 100,
+    '#required' => TRUE,
+  );
+
+  $form['competition']['tel'] = array(
+    '#type' => 'telfield',
+    '#title' => t('Contact telephone number'),
+    '#size' => 40,
+    '#required' => TRUE,
+    '#maxlength' => 60,
+  );
+
+  $term_url_options = array (
+    'fragment' => '/schools-golden-nose-tcs',
+    'external' => TRUE,
+  );
+
+  $form['competition']['terms'] = array(
+    '#type' => 'checkbox',
+    '#title' => t(
+      'I have read and accepted the ' .
+      '<a href="@terms_url" target="_blank">terms and conditions</a>',
+      array('@terms_url' => url('legal', $term_url_options))),
+    '#default_value' => FALSE,
+    '#required' => TRUE,
+  );
+
+  $form['feedback'] = array(
+    '#type' => 'fieldset',
+    '#attributes' => array(),
+  );
+
+  // This is a honeypot field, hidden with CSS and if filled redirect user
+  $form['feedback']['comment_explanation'] = array(
+    '#type' => 'markup',
+    '#markup' => '<p id="form-item-competition-comment-explanation">' .
+      'If you can see the "comment" field below, please ' .
+      'leave it blank, as it is for testing purposes' . '</p>',
+  );
+
+  $form['feedback']['comment'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Comment'),
+    '#title_display' => 'before',
+    '#default_value' => '',
+    '#maxlength' => 100,
+  );
+
+  $form['competition_email'] = array(
+    '#type' => 'fieldset',
+    '#attributes' => array(),
+    '#theme' => 'cr_competition_permission_email',
+  );
+
+  $form['competition_email']['permission_email'] = array(
+    '#type' => 'checkbox',
+    '#title' => filter_xss_admin(variable_get('cr_competition_email_text',
+      CR_COMPETITION_EMAIL_TEXT)),
+    '#default_value' => FALSE,
+  );
+
+  $form['competition']['sourceUrl'] = array(
+    '#type' => 'value',
+    '#value' => url(current_path(), array('absolute' => TRUE)),
+  );
+
+  $cancel_url = $_GET['q'];
+  if (!empty($conf->cancel_url)) {
+    $cancel_url = url($conf->cancel_url, array('absolute' => TRUE));
+  }
+
+  $form['cancel'] = array(
+    '#type' => 'link',
+    '#href' => $cancel_url,
+    '#title' => t('Cancel'),
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Enter'),
+    '#attributes' => array('class' => array('button-competition', 'button')),
+  );
+
+  // Validation & submit handlers
+  $form['#validate'] = array('cr_competition_form_validate');
+  $form['#submit'] = array('cr_competition_form_submit');
+
+  return $form;
+}
+
+/**
+ * Implements of hook_theme()
+ */
+function cr_competition_theme() {
+  return array(
+    'cr_competition_form' => array(
+      'render element' => 'form',
+      'template' => 'cr-competition-form',
+    ),
+    'cr_competition_details' => array(
+      'render element' => 'form',
+      'template' => 'cr-competition-details',
+    ),
+    'cr_competition_permission_email' => array(
+      'render element' => 'form',
+      'template' => 'cr-competition-permission-email',
+    ),
+  );
+}
+
+/**
+ * Retrieve the correct transSource from the platform and whether under 16
+ * @param $conf
+ * @param $age_group 'under16' or other
+ * @param $platform - 'mobile' or other
+ */
+function cr_competition_get_source($conf, $age_group, $platform = 'desktop') {
+  if ($age_group === 'under16') {
+    switch($platform) {
+      case 'mobile':
+        return $conf->trans_source_child_mob;
+        break;
+      default:
+        return $conf->trans_source_child;
+        break;
+    }
+  }
+  switch($platform) {
+    case 'mobile':
+      return $conf->trans_source_adult_mob;
+      break;
+    default:
+      return $conf->trans_source_adult;
+      break;
+  }
+}
+
+/**
+ * Validation handler
+ */
+function cr_competition_form_validate($form, &$form_state) {
+  // Default to over16
+  $values = $form_state['values'];
+  $values['age_group'] = $values['age_group'] === CR_COMPETITION_UNDER16 ?
+    CR_COMPETITION_UNDER16 : CR_COMPETITION_OVER16;
+}
+
+/**
+ * Submit handler sends
+ * ESU message, Campaign Commander API call, Competition message
+ *
+ * @param $mock mock MessageBroker used for testing
+ */
+function cr_competition_form_submit($form, &$form_state, $mock = null) {
+  $values = &$form_state['values'];
+  $conf = $form_state['conf'];
+  $age_group = !empty($values['age_group']) ? $values['age_group'] : '';
+  $platform = !empty($values['platform']) ? $values['platform'] : '';
+
+  $redirect_url = cr_competition_get_redirect($conf, $age_group);
+
+  // Honey pot redirection
+  if (!empty($values['comment'])) {
+    drupal_goto(url($redirect_url), array('absolute' => TRUE));
+    return;
+  }
+
+  $timestamp = time();
+
+  // Re-use ESU message delivery for opt-ins and welcome emails
+  if ($values['permission_email'] === 1) {
+    $esu_data = cr_competition_get_esu_data($form_state);
+    $esu_data['timestamp'] = $timestamp;
+    $ok = cr_marketing_prefs_subscribe('marketing_general', $esu_data, $mock);
+    if (!$ok) {
+      drupal_set_message(CR_MARKETING_PREFS_ERROR_MESSAGE, 'error');
+    }
+  }
+
+  // Send competition message
+  $comp_data = cr_competition_get_competition_data($form_state);
+  $comp_data['timestamp'] = $timestamp;
+  cr_competition_subscribe($comp_data, $mock);
+
+  $trans_source = cr_competition_get_source($conf, $age_group, $platform);
+
+  // Send competition welcome email
+  $email_unique = !empty($conf->trans_email_unique) ? $conf->trans_email_unique : '';
+  $email_security = !empty($conf->trans_email_security) ? $conf->trans_email_security : '';
+  cr_transaction_emails_send($values['email'], $email_unique, $email_security, $trans_source);
+
+  $form_state['redirect'] =  url($redirect_url, array('absolute' => TRUE));
+}
+
+/**
+ * Extract email sign up message data from form
+ * @param $form_state
+ * @return array
+ */
+function cr_competition_get_esu_data(&$form_state) {
+  $values = $form_state['values'];
+  $conf = $form_state['conf'];
+
+  // Set transSource
+  $age_group = !empty($values['age_group']) ? $values['age_group'] : '';
+  $platform = !empty($values['platform']) ? $values['platform'] : '';
+  $trans_source = cr_competition_get_source($conf, $age_group, $platform);
+
+  // These keys are later remapped in cr_marketing_prefs_subscribe()'s call to
+  // _cr_donate_prepare_for_message_queue()
+
+  $data = array(
+    'email' => $values['email'],
+    'lists' => array('general' => 'general'), //needed by wsv2 - ep need?
+    'source' => $trans_source,
+    'sourceUrl' => $values['sourceUrl'],
+    'sendEmail' => FALSE,
+    'firstName' => $values['first_name'],
+  );
+
+  return $data;
+}
+
+/**
+ * Extract email sign up message data from form
+ * @param $form_state
+ * @return array
+ */
+function cr_competition_get_competition_data($form_state) {
+  $values = $form_state['values'];
+  $conf = $form_state['conf'];
+
+  // Set transSource
+  $age_group = !empty($values['age_group']) ? $values['age_group'] : '';
+  $platform = !empty($values['platform']) ? $values['platform'] : '';
+  $trans_source = cr_competition_get_source($conf, $age_group, $platform);
+
+  $data = array(
+    'email' => $values['email'],
+    'transType' => CR_COMPETITION_MSG_TYPE,
+    'transSource' => $trans_source,
+    'transSourceUrl' => $values['sourceUrl'],
+    'sendEmail' => FALSE,
+    'firstName' => $values['first_name'],
+    'lastName' => $values['last_name'],
+    'telephone' => $values['tel'],
+  );
+
+  if (!empty($values['child_name'])) {
+    $data['childName'] = $values['child_name'];
+  }
+
+  return $data;
+}
+
+/**
+ * Implements hook_ctools_plugin_directory() to identify plugin location
+ */
+function cr_competition_ctools_plugin_directory($module, $plugin) {
+  if ($module == 'ctools' && !empty($plugin)) {
+    return "plugins/$plugin";
+  }
+}
+
+/**
+ * Encode and send competition message
+ * @param $data message data
+ * @param null $broker inject mock message broker for testing
+ * @return bool indicating success
+ */
+function cr_competition_subscribe($data, &$broker = null) {
+  $data['campaign'] = CR_CAMPAIGN_ID;
+  try {
+    if (!is_object($broker) || !$broker instanceof MessageBrokerInterface) {
+      $broker = message_broker_get();
+    }
+    $exchange = variable_get('cr_message_queues_exchange', CR_MESSAGE_QUEUES_DEFAULT_EXCHANGE);
+    $message_body = json_encode($data);
+    $message_metadata = array(
+      'routing_key' => $exchange.'.competition',
+      'content_type' => 'application/json'
+    );
+    $broker->sendMessage($message_body,  $exchange, $message_metadata);
+  }
+  catch (MessageBrokerException $mbe) {
+    watchdog('cr_competition', 'Message Queues: !error',
+      array('!error' => $mbe->getMessage(), WATCHDOG_ERROR));
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+/**
+ * Select redirection URL based on age
+ * @param $conf
+ * @param $age_group
+ */
+function cr_competition_get_redirect($conf, $age_group) {
+  $redirect_url = !empty($conf->redirect_url) ? $conf->redirect_url : current_path();
+
+  if ($age_group === CR_COMPETITION_UNDER16) {
+    $redirect_url = !empty($conf->redirect_child_url) ? $conf->redirect_child_url : current_path();
+  }
+  return $redirect_url;
+}

@@ -1,0 +1,69 @@
+<?php
+/**
+ * @file
+ * .install file for cr_invalidate_varnish module
+ *
+ * Contains hook_schema implementation for saving invalidation requests
+ *
+ * Author: Graham Utton
+ */
+
+
+/**
+ * Implements hook_schema().
+ */
+function cr_invalidate_varnish_schema() {
+  $schema['cr_varnish_invalidation'] = array(
+    'description' => 'Holds data related to varnish cache invalidation requests.',
+    'fields' => array(
+      'viid' => array(
+        'description' => 'The primary identifier for an varnish invalidation request.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'url' => array(
+        'description' => 'The unique identifier for the varnish cache object (url)',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      // would have liked to use timestamp type for next 2 fields, but not
+      // supported in schema API, and forcing with sql_type key seems to be
+      // unreliable
+      'request_time' => array(
+        'description' => 'Timestamp of when this invalidation was requested.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'scheduled_time' => array(
+        'description' => 'Timestamp of when this invalidation was scheduled for.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('viid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function cr_invalidate_varnish_uninstall() {
+  $variables = array(
+    'cr_invalidate_varnish_service_endpoint',
+    'cr_invalidate_varnish_window_duration',
+    'cr_invalidate_varnish_window_limit',
+    'cr_invalidate_varnish_schedule_buffer_duration',
+    'cr_invalidate_varnish_stub_service',
+  );
+
+  foreach ($variables as $variable) {
+    variable_del($variable);
+  }
+}

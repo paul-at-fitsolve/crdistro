@@ -1,0 +1,49 @@
+<?php
+/**
+ * @file
+ * A block module that performs quickfinding on the FAQ page
+ */
+
+function quickfinder_help($path, $arg) {
+	switch ($path) {
+		case "admin/help#quickfinder":
+			return '<p>' . t("Apply 'Quickfinder Block' to a Panel pane; Quickfinder will pull all h3 (subheadings) and h2 (pane title) tags from any Tab-style pane.") . '</p>';
+			break;
+	}
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function quickfinder_block_info(){
+	$blocks['quickfinder'] = array (
+		'info' => t('Quickfinder Block'),
+		'cache' => DRUPAL_NO_CACHE, 
+	);
+	return $blocks;
+}
+
+
+
+function quickfinder_block_view($delta = '') {
+	switch($delta){
+		case 'quickfinder':
+			$block['subject'] = "<none>";
+      		$block['content']['#markup'] = theme('quickfinder_block');
+      		drupal_add_js(drupal_get_path('module', 'quickfinder') . '/typeahead.min.js', 'file');
+      		drupal_add_js(drupal_get_path('module', 'quickfinder') . '/quickfinder.js', 'file');
+
+      		break;
+	}
+	return $block;
+}
+
+
+
+function quickfinder_theme() {
+  return array(
+    'quickfinder_block' => array(
+      'template' => 'quickfinder-block',
+    ), 
+  );
+}

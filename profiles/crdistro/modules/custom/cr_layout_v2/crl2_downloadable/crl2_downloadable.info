@@ -1,0 +1,9 @@
+name = CRL2 Downloadables
+description = Provides a CR Layout 2 downloadable entity type with field tokens
+core = 7.x
+package = "CR Layout V2"
+php = 5.2.4
+version = 7.x-1.0
+project = crl2_downloadable
+dependencies[] = entity
+dependencies[] = file

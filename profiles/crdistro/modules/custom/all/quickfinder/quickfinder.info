@@ -1,0 +1,4 @@
+name = Quickfinder
+description = Creates a block to pull and scroll to h3 content within a 'Tabs'-style Panel panel 
+core = 7.x
+package = "Comic Relief"

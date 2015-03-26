@@ -1,0 +1,13 @@
+name = Ideas Generator
+description = Provides the fun and exciting ideas generator
+core = 7.x
+package = "Comic Relief"
+version = "7.x-1.0"
+
+files[] = cr_ig.views_default.inc
+
+dependencies[] = cr_fg_services
+dependencies[] = entity
+dependencies[] = number
+dependencies[] = text
+dependencies[] = views_json

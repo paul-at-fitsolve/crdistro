@@ -1,0 +1,170 @@
+<?php
+
+
+/**
+ * Implements hook_token_info()
+ * 
+ * cr_share:summary > Grabs the meta description value. 
+ * Could be extended to get the text trimmed version OR if that doesn't exist could create one.
+ * cr_share:content_url > Gets the actual URL of the page, not the colorbox version
+ */
+function cr_share_token_info() {
+  $types['cr_share'] = array(
+    'name' => t("CR Share Tokens"),
+    'description' => t(""),
+  );
+  $path['summary'] = array(
+    'name' => t("Share Summary"),
+    'description' => t("Either node summary or specific meta description."),
+  );
+  $path['content_url'] = array(
+    'name' => t("Content URL"),
+    'description' => t("Gets the actual URL of the content e.g. removes the /colorbox/."),
+  );
+  return array(
+    'types' => $types,
+    'tokens' => array(
+      'path' => $path,
+    ),
+  );
+}
+
+/**
+ * Implements hook_bean_types_api_info().
+ */
+function cr_share_bean_types_api_info() {
+  return array('api' => 4);
+}
+
+/**
+ * Implements hook_bean_types().
+ */
+function cr_share_bean_types() {
+  $plugins = array();
+  $plugin_path = drupal_get_path('module', 'cr_share') . '/plugins/bean';
+  $plugins['cr_share'] = array(
+    'label' => t('CR Share'),
+    'description' => t('Configurable Share Link Block'),
+    'abstract' => FALSE,
+    'handler' => array(
+      'class' => 'CrShareBean',
+      'parent' => 'bean',
+    ),
+    'path' => $plugin_path,
+    'file' => 'CrShareBean.class.php',
+  );
+  return $plugins;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function cr_share_theme() {
+  $items = array();
+  $items['cr_share_links'] = array(
+    'variables' => array(
+      'body' => NULL,
+      'title' => NULL,
+      'js_settings' => NULL,
+    )
+  );
+  return $items;
+}
+
+/**
+ * Theming the share links
+ */
+function theme_cr_share_links($variables) {
+  $title = $variables['title'];
+  $body = $variables['body'];
+  $js_settings = $variables['js_settings'];
+
+  $basepath = drupal_get_path('module', 'cr_share');
+  $socialite_path = _cr_share_load_socialite();
+
+  $content = array(
+    '#type' => 'container',
+    '#attributes' => array(
+      'class' => array('cr-share-links'),
+    ),
+  );
+  $content['sharelinks'] = array(
+    '#markup' => $body,
+    '#prefix' => '<h2 class="share-title">' . t($title) . '</h2>',
+    '#attached' => array(
+      'css' => array($basepath . '/css/cr_share.css'),
+      'js'  => array(
+        array('type' => 'file', 'data' => $socialite_path),
+        array('type' => 'file', 'data' => $basepath . '/js/cr_share.min.js'),
+        array(
+          'data' => array('cr_share' => $js_settings),
+          'type' => 'setting'
+        )
+      ),
+    ),
+  );
+
+  return render($content);
+}
+
+/**
+ * Implements hook_tokens(). This hook will operate the token and replace it with its value.
+ *
+ * Tokens should be added to content using their type prefix, Eg) [path:token_name]
+ */
+function cr_share_tokens($type, $tokens, array $data = array(), array $options = array()) {
+  $replacements = array();
+  $sanitize = !empty($options['sanitize']);
+  if($type == 'cr_share') {
+    foreach($tokens as $name => $original) {
+      switch($name) {
+        case 'summary':
+          /* TODO, needs come in from settings of block module */
+          $meta_og_description = t('Comic Relief is a major charity based in the UK which strives to create a just world free from poverty – and we work 365 days a year to help that vision become a reality.');
+          // If node panel page or node update meta descriptions provided by meta tag
+          if(arg(0) == 'node' && is_numeric(arg(1)) && !arg(2) ){
+            $node = menu_get_object();
+            // Set met tag decscriptions
+            if(isset($node->metatags['und']['description']['value']) && !empty($node->metatags['und']['description']['value'])){
+             $meta_og_description = $node->metatags['und']['description']['value'];
+            }
+          }
+          // If page manager panel page
+          if(module_exists('page_manager') && ($panel = page_manager_get_current_page())) {
+            // Set met tag decscriptions
+            if(isset($panel['handler']->conf['metatag_panels']) && !empty($panel['handler']->conf['metatag_panels']['metatags']['og:description']['value'])){
+              $meta_og_description = $panel['handler']->conf['metatag_panels']['metatags']['og:description']['value'];
+            }
+          }
+          $replacement_value = $meta_og_description;
+          $replacements[$original] = $sanitize ? filter_xss($replacement_value) : $replacement_value;
+        break;
+        case 'content_url':
+          $url = '';
+          if($data['node']) {
+            $url = url(drupal_get_path_alias('node/' . $data['node']->nid), array('absolute' => TRUE));
+          }
+          $replacement_value = $url;
+          $replacements[$original] = $sanitize ? filter_xss($replacement_value) : $replacement_value;
+        break;
+      }
+    }
+  }
+  return $replacements;
+}
+ 
+/**
+ * Helper function to get socialite js from the libraries path
+ */
+function _cr_share_load_socialite() {
+  $socialite_path = null;
+  if ($path = libraries_get_path('socialitejs')) {
+    if (file_exists($path . '/socialite.min.js')) {
+      $socialite_path = $path . '/socialite.min.js';
+    }
+    elseif (file_exists($path . '/socialite.js')) {
+      $socialite_path = $path . '/socialite.js';
+    }
+  }
+  return $socialite_path;
+}

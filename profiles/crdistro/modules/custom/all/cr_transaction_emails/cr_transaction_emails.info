@@ -1,0 +1,6 @@
+name = Comic Relief Transactional Emails
+description = Provides configuration fieldset and handler for sending email via SmartFocus API
+core = 7.x
+version = 7.x-0.1
+project = cr_transaction_emails
+package = "Comic Relief"

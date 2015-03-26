@@ -1,0 +1,8 @@
+name = Invalidate Varnish
+description = Provides functionaliy for requesting and tracking varnish invalidations.
+core = 7.x
+package = 'Comic Relief'
+php = 5.3.10
+version = 7.x-0.01
+project = cr_invalidate_varnish
+configure = admin/config/services/varnish_invalidation

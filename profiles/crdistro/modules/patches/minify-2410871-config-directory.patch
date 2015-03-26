@@ -1,0 +1,125 @@
+diff --git a/minify.admin.inc b/minify.admin.inc
+index f6a8b93..08ff513 100644
+--- a/minify.admin.inc
++++ b/minify.admin.inc
+@@ -206,7 +206,7 @@ function minify_batch_process($script, &$context) {
+  * Submit callback to clear captured data
+  */
+ function minify_clear_js_cache($form, &$form_state) {
+-  $minify_dir = variable_get('file_public_path', conf_path() . '/files') . '/minify';
++  $minify_dir = minify_calc_dir();
+   $files = file_scan_directory($minify_dir, '/.*\.*$/');
+   foreach ($files as $key => $value) {
+     drupal_unlink($key);
+@@ -301,7 +301,7 @@ function _minify_send_request($post_data) {
+  * Helper function to construct minified js path
+  */
+ function _minify_construct_min_js_path($script, $version) {
+-  $minify_js_dir = variable_get('file_public_path', conf_path() . '/files') . '/minify/';
++  $minify_js_dir = minify_calc_dir();
+   if (!is_dir($minify_js_dir)) {
+     drupal_mkdir($minify_js_dir);
+   }
+diff --git a/minify.module b/minify.module
+index c2c8da5..55ec5bd 100644
+--- a/minify.module
++++ b/minify.module
+@@ -8,6 +8,7 @@ function minify_help($path, $arg) {
+     case 'admin/config/development/performance/minifyjs':
+       $output = '<p>' . t('This is a simple module that provides the mechanism to minify JavaScript files, ');
+       $output .= t('which ultimatly reduces the file size and load time.') . '</p>';
++      $output .= drupal_render(drupal_get_form('minify_form_directory_selector'));
+       $output .= '<p>' . t('In <b>Operations</b> column,<br /><b>Minify</b> => Generate the minified version,<br />');
+       $output .= t('<b>Refresh</b> => Refresh/regenerate the minified version,<br />');
+       $output .= t('<b>Revert</b> => Revert the changes and use the original file.') . '</p>';
+@@ -296,6 +297,7 @@ function minify_js_alter(&$scripts) {
+       }
+     }
+   }
++
+ }
+ 
+ /*
+@@ -333,3 +335,81 @@ function _minify_replace_array_key($array, $old_key, $new_key) {
+   }
+   return $array;
+ }
++
++/**
++ * @param $form
++ * @param $form_state
++ * @return mixed
++ *
++ * Configuration form for selecting where to store the minified js files.
++ */
++function minify_form_directory_selector($form, &$form_state) {
++
++  global $conf;
++
++  $default_theme = $conf['theme_default'];
++
++  $themes = list_themes($refresh = FALSE);
++  $directory_selector = array_keys($themes);
++  array_unshift($directory_selector, t("File directory"));
++  $directory = minify_calc_dir();
++
++  $form['heading'] =  array(
++    '#markup' => t('Current theme is @theme.', array('@theme' => $default_theme)),
++  );
++
++  $form['storage'] =  array(
++    '#markup' => t('Minify files are stored in @theme - directory: @directory.',
++      array('@theme' => $default_theme,
++        '@directory' => $directory)),
++  );
++
++  $form['minify_directory'] = array(
++    '#type' => 'select',
++    '#title' => t('Select where minify files should be stored'),
++    '#description' => t("The minify files will be stored under this directory."),
++    '#required' => TRUE,
++    '#options' => $directory_selector,
++    '#default_value' => variable_get('minify_directory', 0),
++  );
++
++  $form['submit'] = array(
++    '#type' => 'submit',
++    '#value' => t('Save directory'),
++  );
++
++  $form = system_settings_form($form);
++  $form['#submit'][] = 'minify_clean_refresh'; // Force cache clear on alter.
++
++
++  return $form;
++}
++
++/**
++ * Helper to clear the cache with a message to screen.
++ */
++function minify_clean_refresh() {
++
++  drupal_set_message( t('You must refresh the page to scan files in newly selected directory.'), 'status');
++  minify_clear_js_cache();
++
++}
++
++
++/**
++ * Determine the directory where minify files are to be stored.
++ * @return string
++ *   - The directory with respect to url.
++ */
++function minify_calc_dir() {
++
++  $themes = list_themes($refresh = FALSE);
++  $directory_selector = array_keys($themes);
++  array_unshift($directory_selector, t("File directory"));
++  if (variable_get('minify_directory', 0) == 0) {
++    $directory = variable_get('file_public_path', conf_path() . '/files') . '/minify/';
++  } else {
++    $directory = drupal_get_path('theme', $directory_selector[variable_get('minify_directory', 0)]) . '/minify/';
++  }
++  return $directory;
++}
+\ No newline at end of file

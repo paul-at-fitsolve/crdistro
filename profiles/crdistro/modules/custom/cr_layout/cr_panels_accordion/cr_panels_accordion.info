@@ -1,0 +1,5 @@
+name = CR Panel Accordion
+description = Display panel regions as an accordion
+core = 7.x
+package = "CR Layout V1"
+version = 7.x-1.0

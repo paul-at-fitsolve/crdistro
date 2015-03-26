@@ -1,0 +1,1160 @@
+<?php
+
+/**
+ * @file
+ * Donations module.
+ */
+
+/**
+ * Default giftaid transport
+ */
+define('CR_DONATE_GIFTAID_DEFAULT_TRANSPORT_BACKEND', 'message_queues');
+define('CR_DONATE_DEFAULT_TRANSPORT_BACKEND', 'message_queues');
+define ('CR_DONATE_MSG_TYPE', 'donation');
+define ('CR_DONATE_GIFTAID_MSG_TYPE', 'giftaid_declaration');
+
+/**
+ * Default copy for donate page text
+ */
+define('CR_DONATE_GIFTAID_TEXT', 'If this amount is a personal donation, you are a UK taxpayer, '
+      . 'and you select "YES" above, the Government will give us 25% extra. All you '
+      . 'need to do is pay enough UK Income and/or Capital Gains tax in the current '
+      . 'tax year to cover the 25% that Comic Relief and any other charities or '
+      . 'Community Amateur Sports Clubs will claim (Council Tax and VAT do not count). '
+      . '<br /><a href="/faq" target="_blank">Find out more about Gift Aid</a>.');
+define('CR_DONATE_MARKETING_PREFS_EMAIL_TEXT', 'I would like to receive news by email.');
+define('CR_DONATE_MARKETING_PREFS_POST_TEXT', 'I would like to receive information by post. If you do not wish to be sent information by post, please untick the box.');
+define('CR_DONATE_GIFTAID_MSG_PREFIX', 'Comic Relief can claim Gift Aid on your donation<sup>*</sup>: ');
+define('CR_DONATE_GIFTAID_ERROR_MESSAGE', 'Oops! Something went wrong.' .
+  'Please try again later to sign up for Gift Aid,' .
+  ' which costs you nothing but keeps us going.');
+define('CR_DONATE_GIFTAID_MSG_EXPLANATION', '<br/>* If this amount is a '
+  . 'personal donation, you are a UK taxpayer, and you have said "YES" to '
+  . 'Gift Aid, the Government will give us 25% extra. All you need to do '
+  . 'is pay enough UK Income and/or Capital Gains tax in the current tax '
+  . 'year to cover the 25% that Comic Relief and any other charities or '
+  . 'Community Amateur Sports Clubs will claim (Council Tax and VAT do not '
+  . 'count). For more information on Gift Aid or if you would like to '
+  . 'change your selection above please email: giftaid@comicrelief.com '
+  . 'quoting the transaction details above.<br/>');
+
+/**
+ * Implements hook_menu().
+ */
+function cr_donate_menu() {
+  $items['donate/worldpay/complete'] = array (
+    'title' => 'Thanks for your donation',
+    'page callback' => 'cr_donate_worldpay_complete',
+    'access callback' => '_cr_donate_wp_access',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/config/services/cr/donate'] = array(
+    'title' => 'Donations',
+    'description' => 'Configure the Comic Relief site wide donation settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cr_donate_settings_form'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'cr_donate.admin.inc',
+  );
+
+  if (variable_get('cr_donate_redirect_to_alt', FALSE)) {
+    $items['donate'] = array(
+      'title' => 'Redirecting to comicrelief.com/donate',
+      'access callback' => TRUE,
+      'page callback' => 'drupal_goto',
+      'page arguments' => array('https://www.comicrelief.com/donate'),
+    );
+  }
+
+  $items['gift-aid/cancel/%/%/%'] = array(
+    'title' => 'GIFT AID CANCELLATION',
+    'description' => 'Cancel gift aid for for donations via call centre',
+    'page callback' => 'cr_donate_confirm_cancel_giftaid',
+    'page arguments' => array(2, 3, 4),
+    'access callback' => TRUE,
+    'file' => 'cr_donate.cancel_giftaid.inc',
+  );
+
+  $items['gift-aid/cancel/thankyou'] = array(
+    'title' => 'GIFT AID CANCELLATION',
+    'description' => 'Thank you page for cancelling gift aid',
+    'page callback' => 'cr_donate_confirm_cancel_giftaid_thankyou',
+    'access callback' => TRUE,
+    'file' => 'cr_donate.cancel_giftaid.inc',
+  );
+
+  $items['gift-aid/cancel/error'] = array(
+    'title' => 'Gift Aid Cancellation error',
+    'description' => 'Error page for cancelling gift aid',
+    'page callback' => 'cr_donate_confirm_cancel_giftaid_error',
+    'access callback' => TRUE,
+    'file' => 'cr_donate.cancel_giftaid.inc',
+  );
+
+  return $items;
+}
+
+/*
+ * This adds in the the javascript file that picks up any a href to /donate
+ */
+function cr_donate_preprocess_page(&$vars) {
+  if (variable_get('cr_donate_redirect_to_alt', FALSE)) {
+    drupal_add_css(drupal_get_path('module', 'cr_donate').'/cr_donate_redirect.css');
+    drupal_add_js(drupal_get_path('module', 'cr_donate').'/cr_donate_redirect.js');
+  }
+}
+
+/**
+ * Access callback for Worldpay callback page.
+ */
+function _cr_donate_wp_access() {
+  return isset($_POST['callbackPW']) && $_POST['callbackPW'] == variable_get('cr_donate_worldpay_callback_password', '');
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function cr_donate_ctools_plugin_directory($module, $plugin) {
+  if ($module == 'ctools' && !empty($plugin)) {
+    return "plugins/$plugin";
+  }
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function cr_donate_block_info() {
+  $blocks['donate_info'] = array(
+    'info' => t('Donation information'),
+  );
+  $blocks['donate_thank_you'] = array(
+    'info' => t('Donation thank you information'),
+    'cache' => DRUPAL_NO_CACHE,
+  );
+
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function cr_donate_block_view($delta = '') {
+  $block = array();
+
+  switch ($delta) {
+    case 'donate_info':
+      $block['subject'] = NULL;
+      $block['content']['#markup'] = theme('cr_donate_info_block');
+      $block['content']['#attached']['css'][] = drupal_get_path('module', 'cr_donate') . '/cr_donate.css';
+      break;
+
+    case 'donate_thank_you':
+      if (isset($_GET['cartId']) && isset($_GET['transId'])) {
+        $block['content']['#markup'] = theme('cr_donate_thank_you', array(
+          'cart_id' => check_plain($_GET['cartId']),
+          'transaction_id' => check_plain($_GET['transId']),
+          'paypal' => !empty($_GET['paypal']),
+        ));
+
+        if (isset($_GET['amount'])) {
+          if (preg_match('/_PAYINGIN_/i', $_GET['cartId'])) {
+            $product = 'FundraisingMoney';
+          }
+          else {
+            $product = 'Donation';
+          }
+
+          if (!module_exists('googleanalytics')) {
+            return $block;
+          }
+            // Add the transaction details.
+          $args = array($_GET['transId'], $product, $_GET['amount'], '', '', '', '', '');
+          $script = "_gaq.push(['_addTrans', '" . implode("', '", $args) . "']);\n";
+
+          // Add the item details.
+          $args = array($_GET['transId'], $_GET['cartId'], $product, '', $_GET['amount'], 1);
+          $script .= "_gaq.push(['_addItem', '" . implode("', '", $args) . "']);\n";
+
+          // Send the transaction data to Google.
+          $script .= "_gaq.push(['_trackTrans']);\n";
+
+          $block['content']['#attached']['js'][] = array(
+            'data' => $script,
+            'type' => 'inline',
+            // Ensure this gets included after the actual GA module JS.
+            'scope' => variable_get('googleanalytics_js_scope', 'header'),
+            'weight' => 1,
+          );
+        }
+      }
+      break;
+
+  }
+  return $block;
+}
+
+/**
+ * Implements of hook_theme()
+ */
+function cr_donate_theme() {
+  return array(
+    // cr_donate_info_block now lives in the CMS for SR so it is no longer required but I'm leaving it in here in case CR or RND are using it
+    'cr_donate_info_block' => array(
+      'template' => 'cr-donate-info-block',
+    ),
+    'cr_donate_form' => array(
+      'render element' => 'form',
+      'template' => 'cr-donate-form',
+    ),
+    'cr_donate_amount' => array(
+      'render element' => 'form',
+      'template' => 'cr-donate-amount',
+    ),
+    'cr_donate_giftaid' => array (
+      'render element' => 'form',
+      'template' => 'cr-donate-giftaid',
+    ),
+    'cr_donate_billing' => array(
+      'render element' => 'form',
+      'template' => 'cr-donate-billing',
+    ),
+    'cr_donate_thank_you' => array(
+      'variables' => array('cart_id' => '', 'transaction_id' => '', 'paypal' => FALSE),
+      'template' => 'cr-donate-thank-you',
+    ),
+    'cr_donate_card_or_paypal' => array(
+      'render element' => 'form',
+      'template' => 'cr-donate-card-or-paypal',
+    ),
+    'cr_donate_giftaid_billing' => array (
+      'render element' => 'form',
+      'template' => 'cr-donate-giftaid-billing',
+    ),
+    'cr_donate_wp_complete' => array (
+      'variables' => array('refresh_url' => ''),
+      'template' => 'cr-donate-wp-complete',
+    ),
+    'cr_donate_giftaid_form' => array(
+      'render element' => 'form',
+      'template' => 'cr-donate-giftaid-form',
+    ),
+    'cr_donate_confirm_cancel_giftaid' => array(
+      'variables' => array('form' => array()),
+      'template' => 'cr-donate-confirm-cancel-giftaid',
+    ),
+    'cr_donate_confirm_cancel_giftaid_thankyou' => array(
+      'template' => 'cr-donate-confirm-cancel-giftaid-thankyou',
+      'variables' => array(),
+    ),
+    'cr_donate_confirm_cancel_giftaid_error' => array(
+      'template' => 'cr-donate-confirm-cancel-giftaid-error',
+      'variables' => array(
+        'message' => '',
+      ),
+    ),
+    'cr_donate_pay_in_form' => array(
+      'render element' => 'form',
+    ),
+  );
+}
+
+/**
+ * Comic Relief donation form.
+ */
+function cr_donate_form($form, &$form_state, $conf) {
+  drupal_add_js(drupal_get_path('module', 'cr_donate') . '/cr_donate.js');
+  global $base_url;
+  $methods = isset($conf->methods) ? $conf->methods : variable_get('cr_donate_methods', array('worldpay' => TRUE, 'paypal' => TRUE));
+
+  // WorldPay installation and cart IDs.
+  $form['instId'] = array(
+    '#type' => 'value',
+    '#value' => !empty($conf->worldpay_installation) ? $conf->worldpay_installation : variable_get('cr_donate_worldpay_installation', ''),
+  );
+  $form['accId1'] = array(
+    '#type' => 'value',
+    '#value' => !empty($conf->worldpay_account) ? $conf->worldpay_account : variable_get('cr_donate_worldpay_account', ''),
+  );
+  $form['cartId'] = array(
+    '#type' => 'value',
+    '#value' => !empty($_GET['cartId']) ? $_GET['cartId'] : $conf->cart_id,
+  );
+  $form['cartId_mobile'] = array(
+    '#type' => 'value',
+    '#value' => !empty($_GET['cartIdMobile']) ? $_GET['cartIdMobile'] : $conf->cart_id_mobile,
+  );
+
+  $form['pingit_url'] = array(
+    '#type' => 'value',
+    '#value' => !empty($conf->pingit_url) ? check_url($conf->pingit_url) : '',
+  );
+
+  // Desktop or mobile platform flag.
+  $form['platform'] = array(
+    '#type' => 'hidden',
+    '#default_value' => 'desktop',
+  );
+
+  // Use WorldPay test mode in all environments except production.
+  $form['testMode'] = array(
+    '#type' => 'value',
+    '#value' => cr_donate_test_mode() ? '100' : '0',
+  );
+
+  // Purchase description as displayed to user.
+  $form['desc'] = array(
+    '#type' => 'value',
+    '#value' => !empty($conf->desc) ? $conf->desc : variable_get('cr_donate_worldpay_description', 'Comic Relief donation'),
+  );
+
+  //Set the callback according to config
+  $form['MC_callback'] = array(
+    '#type' => 'value',
+  );
+  switch (variable_get('cr_donate_transport_backend', CR_DONATE_DEFAULT_TRANSPORT_BACKEND)) {
+    case 'message_queues':
+      $form['MC_callback']['#value'] = $base_url . '/donate/worldpay/complete';
+      break;
+    case 'webservices':
+      $form['MC_callback']['#value'] = cr_webservices_base_url(FALSE) . 'donation/wp/save';
+      break;
+  }
+
+  // Thank you redirect URL.
+  $url = !empty($conf->redirect_url) ? $conf->redirect_url : 'donate/thankyou';
+  $form['MC_url_redirect'] = array(
+    '#type' => 'value',
+    '#value' => url($url, array('absolute' => TRUE)),
+  );
+
+  // Cancel redirect URL.
+  $form['MC_url_cancel'] = array(
+    '#type' => 'value',
+    '#value' => url('donate/cancel', array('absolute' => TRUE)),
+  );
+
+  // Domain name, displayed on result pages.
+  $form['MC_domain'] = array(
+    '#type' => 'value',
+    '#value' => $base_url,
+  );
+
+  // If set in the querystring, send "simulate webservices unavailable" flag.
+  if (!empty($_GET['ws_down'])) {
+    $form['MC_ws_down'] = array(
+      '#type' => 'value',
+      '#value' => $_GET['ws_down'],
+    );
+  }
+
+  // Send campaign ID and page name to WorldPay for later use in cr_donation.
+  $form['MC_cr_donate_prefix'] = array(
+    '#type' => 'value',
+    '#value' => CR_CAMPAIGN_ID,
+  );
+  $form['MC_cr_donate_name'] = array(
+    '#type' => 'value',
+    '#value' => 'donate',
+  );
+
+  // Send campaign ID and source to WorldPay for later use in cr_transaction.
+  $form['MC_trans_source'] = array(
+    '#type' => 'value',
+    '#value' => $conf->cart_id, // Use cart ID for now.
+  );
+  $form['MC_cr_source_url'] = array(
+    '#type' => 'value',
+    '#value' => url(current_path(), array('absolute' => TRUE)),
+  );
+  $form['MC_campaign'] = array(
+    '#type' => 'value',
+    '#value' => CR_CAMPAIGN_ID,
+  );
+
+  // Ensure users cannot edit contact details at WorldPay.
+  $form['fixContact'] = array(
+    '#type' => 'value',
+    '#value' => '1',
+  );
+
+  $form['amount'] = array(
+    '#type' => 'fieldset',
+    '#attributes' => array('class' => array('donate-amount')),
+    '#theme' => 'cr_donate_amount',
+  );
+  $form['amount']['amount'] = array(
+    '#type' => 'numberfield',
+    '#title' => t('Donation amount'),
+    '#attributes' => array(
+      'class' => array('cr-donate-amount'),
+      'maxlength' => 7,
+      'min' => 0,
+      'max' => 5000,
+    ),
+    '#default_value' => isset($_GET['amount']) ? $_GET['amount'] : '',
+    '#placeholder' => t('Enter your own amount'),
+    '#element_validate' => array(),
+  );
+  $form['amount']['currency'] = array(
+    '#type' => 'select',
+    '#title' => t('Select currency'),
+    '#options' => array(
+      'GBP' => '(GBP) Pounds Sterling',
+      'EUR' => '(EUR) Euro',
+      'AUD' => '(AUD) Australian Dollar',
+      'USD' => '(USD) US Dollar',
+    ),
+    '#default_value' => 'GBP',
+    '#attributes' => array('class' => array('cr-donate-currency')),
+  );
+  if (variable_get('cr_donate_currency_option', 'select') == 'radios') {
+    $form['amount']['currency']['#type'] = 'radios';
+    $form['amount']['currency']['#options']['GBP'] = '£GBP';
+    $form['amount']['currency']['#options']['EUR'] = '€EUR';
+    $form['amount']['currency']['#options']['AUD'] = '$AUD';
+    $form['amount']['currency']['#options']['USD'] = '$USD';
+  }
+
+  $form['giftaid'] = array(
+    '#type' => 'fieldset',
+    '#attributes' => array('class' => array('donate-giftaid')),
+    '#theme' => 'cr_donate_giftaid'
+  );
+
+  $calculator = variable_get('cr_donate_giftaid_calculator', '');
+  if (!empty($calculator)) {
+    $calculator = str_replace('AMOUNT', '<span class="giftaid-calculator-amount">25%</span>', $calculator);
+    $calculator = str_replace('DONATION', '<span class="giftaid-calculator-donation"></span>', $calculator);
+    $form['giftaid']['calculator'] = array(
+      '#type' => 'markup',
+      '#markup' => filter_xss_admin($calculator),
+    );
+  }
+
+  $form['giftaid']['MC_permission_giftaid'] = array(
+    '#type' => 'checkbox',
+    '#title' => 'Yes, I would like Comic Relief to claim Gift Aid on my donation',
+    '#description' => filter_xss_admin(variable_get('cr_donate_giftaid_text', CR_DONATE_GIFTAID_TEXT)),
+  );
+
+  $form['giftaid']['MC_permission_giftaid_message'] = array(
+    '#type' => 'hidden',
+    '#default_value' => '',
+  );
+
+  if (!empty($methods['paypal'])) {
+    if (!empty($methods['worldpay'])) {
+      $form['card_or_paypal'] = array(
+        '#type' => 'fieldset',
+        '#attributes' => array('class' => array('donate-card-or-paypal')),
+        '#theme' => 'cr_donate_card_or_paypal',
+      );
+    }
+    else {
+      $form['card_or_paypal']['paypal_prefix'] = array(
+//        '#markup' => '<p class="donate-paypal-only">Check out with <span>PayPal</span>',
+        '#markup' => '<p class="donate-paypal-only">',
+      );
+    }
+    $form['card_or_paypal']['paypal'] = array(
+      '#type' => 'submit',
+      '#value' => t('Donate with PayPal'),
+      '#attributes' => array('class' => array('button-paypal', 'button')),
+      '#validate' => array('cr_donate_form_validate_amount'),
+      '#submit' => array('cr_donate_form_submit_paypal'),
+    );
+    if (empty($methods['worldpay'])) {
+      $form['card_or_paypal']['paypal_suffix'] = array(
+        '#markup' => '</p>',
+      );
+    }
+
+    if (module_exists('ife')) {
+      $form['card_or_paypal']['paypal']['#validate'][] = 'ife_form_validator';
+    }
+  }
+
+  if (!empty($methods['worldpay'])) {
+    $form['method'] = array(
+      '#type' => 'fieldset',
+      '#description' => '<h2>Select your payment method ' . theme('form_required_marker') . '</h2>',
+      '#attributes' => array('class' => array('donate-method')),
+    );
+
+
+    //Make it easier to maintain
+    $payment_methods_img_path = drupal_get_path('module', 'cr_donate') . '/images/payment-methods/';
+    $payment_methods_img_vars = array(
+      'paypal' => array(
+        'path' => $payment_methods_img_path . 'paypal.png',
+        'alt' => 'PayPal',
+        'attributes' => array(
+          'class' => array('icon-pm icon-pm-paypal')
+        ),
+      ),
+
+      'amex' => array(
+        'path' => $payment_methods_img_path . 'ae.png',
+        'alt' => 'American Express',
+        'attributes' => array(
+          'class' => array('icon-pm icon-pm-amex')
+        ),
+      ),
+
+      'jcb' => array(
+        'path' => $payment_methods_img_path . 'jcb.png',
+        'alt' => 'JCB',
+        'attributes' => array(
+          'class' => array('icon-pm icon-pm-jcb')
+        ),
+      ),
+
+      'mastercard' => array(
+        'path' => $payment_methods_img_path . 'mastercard.png',
+        'alt' => 'MasterCard',
+        'attributes' => array(
+          'class' => array('icon-pm icon-pm-mastercard')
+        ),
+      ),
+
+      'mastercard_debit' => array(
+        'path' => $payment_methods_img_path . 'mastercard_debit.png',
+        'alt' => 'MasterCard Debit',
+        'attributes' => array(
+          'class' => array('icon-pm icon-pm-mastercard--debit')
+        ),
+      ),
+
+      'maestro' => array(
+        'path' => $payment_methods_img_path . 'maestro.png',
+        'alt' => 'Maestro',
+        'attributes' => array(
+          'class' => array('icon-pm icon-pm-maestro')
+        ),
+      ),
+
+      'visa' => array(
+        'path' => $payment_methods_img_path . 'visa.png',
+        'alt' => 'Visa',
+        'attributes' => array(
+          'class' => array('icon-pm icon-pm-visa')
+        ),
+      ),
+
+      'visa_debit' => array(
+        'path' => $payment_methods_img_path . 'visa_debit.png',
+        'alt' => 'Visa Debit',
+        'attributes' => array(
+          'class' => array('icon-pm icon-pm-visa--debit')
+        ),
+      ),
+
+      'visa_electron' => array(
+        'path' => $payment_methods_img_path . 'visa_electron.png',
+        'alt' => 'Visa Electron',
+        'attributes' => array(
+          'class' => array('icon-pm icon-pm-visa--electron')
+        ),
+      ),
+    );
+
+    $form['method']['paymentType'] = array(
+      '#type' => 'radios',
+      '#title' => 'Payment method',
+      '#title_display' => 'invisible',
+      '#options' => array(
+        'PAYPAL' => theme('image', $payment_methods_img_vars['paypal']),
+        'AMEX' => theme('image', $payment_methods_img_vars['amex']),
+        'JCB' => theme('image', $payment_methods_img_vars['jcb']),
+        'MSCD' => theme('image', $payment_methods_img_vars['mastercard']),
+        'DMC' => theme('image', $payment_methods_img_vars['mastercard_debit']),
+        'MAES' => theme('image', $payment_methods_img_vars['maestro']),
+        'VISA' => theme('image', $payment_methods_img_vars['visa']),
+        'VISD' => theme('image', $payment_methods_img_vars['visa_debit']),
+        'VIED' => theme('image', $payment_methods_img_vars['visa_electron']),
+      ),
+      '#after_build' => array('cr_donate_form_build_payment_type'),
+      '#attributes' => array('class' => array('clearfix')),
+    );
+
+    // Disable PayPal via WorldPay if the separate PayPal route is enabled.
+    if (!empty($methods['paypal'])) {
+      unset($form['method']['paymentType']['#options']['PAYPAL']);
+    }
+
+    $form['method']['paymentType']['#attributes']['class'][] = 'donate-methods-count-' . count($form['method']['paymentType']['#options']);
+
+    $form['billing'] = array(
+      '#type' => 'fieldset',
+      '#description' => '<h2>Billing details</h2><p>Fields marked with a <span class="form-required">*</span> are mandatory</p>',
+      '#attributes' => array('class' => array('donate-billing')),
+      '#theme' => 'cr_donate_billing'
+    );
+    $form['billing']['title'] = array(
+      '#type' => 'select',
+      '#title' => 'Title',
+      '#options' => drupal_map_assoc(array('', 'Mr', 'Mrs', 'Ms', 'Miss', 'Dr')),
+    );
+    $form['billing']['tel'] = array(
+      '#type' => 'telfield',
+      '#title' => 'Contact number',
+      '#size' => 60,
+    );
+    $form['billing']['MC_firstname'] = array(
+      '#type' => 'textfield',
+      '#title' => 'First name' . ' ' . theme('form_required_marker'),
+      '#maxlength' => 25,
+    );
+    $form['billing']['MC_lastname'] = array(
+      '#type' => 'textfield',
+      '#title' => 'Last name' . ' ' . theme('form_required_marker'),
+      '#maxlength' => 50,
+    );
+    $form['billing']['email'] = array(
+      '#type' => 'emailfield',
+      '#title' => 'Email address' . ' ' . theme('form_required_marker'),
+      '#maxlength' => 100,
+      '#element_validate' => array(),
+    );
+    $form['billing']['email_confirm'] = array(
+      '#type' => 'emailfield',
+      '#title' => 'Confirm email address' . ' ' . theme('form_required_marker'),
+      '#maxlength' => 100,
+      '#element_validate' => array(),
+    );
+
+    $form['billing']['address'] = array(
+      '#type' => 'cr_plus',
+      '#after_build' => array('cr_donate_form_address_parsley_validate'),
+    );
+
+    if (!empty($conf->allow_subscribe)) {
+      $form['subscribe'] = array(
+        '#type' => 'fieldset',
+        '#description' => '<h2>Keep me posted</h2>' . '<p>Don\'t worry, we definitely won\'t send you spam or junk mail, or give your details to anyone else.<br />We don\'t like that sort of thing - <a href="/privacy-policy" target="_blank">see our privacy policy</a>.</p>',
+        '#attributes' => array('class' => array('donate-subscribe')),
+      );
+      $form['subscribe']['MC_permission_email'] = array(
+        '#type' => 'checkbox',
+        '#title' => filter_xss_admin(variable_get('cr_donate_marketing_prefs_email_text', CR_DONATE_MARKETING_PREFS_EMAIL_TEXT)),
+        '#default_value' => FALSE,
+      );
+      $text = variable_get('cr_donate_marketing_prefs_post_text', CR_DONATE_MARKETING_PREFS_POST_TEXT);
+      if ($text) {
+        $form['subscribe']['MC_permission_post'] = array(
+          '#type' => 'checkbox',
+          '#title' => filter_xss_admin($text),
+          '#default_value' => TRUE,
+        );
+      }
+      else {
+        $form['subscribe']['MC_permission_post'] = array(
+          '#type' => 'value',
+          '#value' => -1, // "Same as before"
+        );
+      }
+    }
+  }
+
+  if (!empty($methods['worldpay'])) {
+    $form['submit'] = array(
+      '#type' => 'submit',
+      '#value' => 'Make payment',
+      '#validate' => array('cr_donate_form_validate_amount', 'cr_donate_form_validate_worldpay'),
+      '#submit' => array('cr_donate_form_submit_worldpay'),
+      '#weight' => 100,
+    );
+  }
+
+  if (module_exists('ife')) {
+    $form['submit']['#validate'][] = 'ife_form_validator';
+  }
+
+  $form['#attributes'] = array (
+    'class' => array ('clearfix cr-donate-form'),
+    // Break out of frames on submit; useful for when we are inside Facebook.
+    'target' => '_top',
+    // Disable HTML5 validation
+    'novalidate' => 'novalidate',
+  );
+
+  // Use parsley.js for validation.
+  $form['#attached']['js']['parsley'] = drupal_get_path('module', 'cr_donate') . '/parsley1.2.3.js';
+  $form['#attached']['js'][] = drupal_get_path('module', 'cr_donate') . '/cr_donate.validate.js';
+
+  $form['amount']['amount']['#attributes'] += array(
+    'parsley-trigger' => 'blur',
+    'parsley-validation-minlength' => 0,
+    'parsley-required' => "true",
+    'parsley-required-message' => "Please enter an amount",
+    'parsley-type'  => 'number',
+    'parsley-type-number-message' => "Please enter a valid amount",
+    'parsley-min' => '1',
+    'parsley-min-message' => "Please enter a valid amount",
+    'parsley-max' => '5000',
+    'parsley-max-message' => "Thanks for your generosity, but &pound;5,000 is the most we're allowed to accept at one time",
+
+  );
+  $form['method']['paymentType']['#attributes'] = array(
+    'parsley-required' => 'true',
+    'parsley-required-message' => t('Please select a payment method'),
+  );
+  $form['billing']['MC_firstname']['#attributes'] = array(
+    'parsley-required' => 'true',
+    'parsley-required-message' => t('Please fill in your first name'),
+    'parsley-validation-minlength' => 0,
+    'parsley-trigger' => 'blur',
+  );
+  $form['billing']['MC_lastname']['#attributes'] = array(
+    'parsley-required' => 'true',
+    'parsley-required-message' => t('Please fill in your last name'),
+    'parsley-validation-minlength' => 0,
+    'parsley-trigger' => 'blur',
+  );
+  $form['billing']['email']['#attributes'] = array(
+    'parsley-required' => 'true',
+    'parsley-required-message' => t('Please fill in your email address'),
+    'parsley-type' => 'email',
+    'parsley-type-email-message' => t('Please enter a valid email address'),
+    'parsley-validation-minlength' => 0,
+    'parsley-trigger' => 'blur',
+  );
+  $form['billing']['email_confirm']['#attributes'] = array(
+    'parsley-required' => 'true',
+    'parsley-required-message' => t('Please fill in your email address'),
+    'parsley-equalto' => '#edit-email',
+    'parsley-equalto-message' => t("The email addresses you entered don't match"),
+    'parsley-validation-minlength' => 0,
+    'parsley-trigger' => 'blur',
+  );
+
+  // Add Google Analytics event tracking script.
+  $form['#attached']['js'][] = drupal_get_path('module', 'cr_donate') . '/cr_donate.tracking.js';
+
+  return $form;
+}
+
+/**
+ * After build callback for Comic Relief donations form address field.
+ */
+function cr_donate_form_address_parsley_validate($element) {
+  // Add fake required markers, as the fields are skipped for PayPal;
+  // and validation is done manually for WorldPay.
+  $element['postcode']['#title'] .= ' ' . theme('form_required_marker');
+  $element['address']['address1']['#title'] .= ' ' . theme('form_required_marker');
+  $element['address']['town']['#title'] .= ' ' . theme('form_required_marker');
+
+  // Add parsley.js validation.
+  $element['postcode']['#attributes'] = array(
+    'parsley-required' => 'true',
+    'parsley-required-message' => t('Please fill in your postcode'),
+    'parsley-validation-minlength' => 0,
+    'parsley-trigger' => 'blur',
+  );
+  $element['address']['address1']['#attributes'] = array(
+    'parsley-required' => 'true',
+    'parsley-required-message' => t('Please fill in your address'),
+    'parsley-validation-minlength' => 0,
+    'parsley-trigger' => 'blur',
+  );
+  $element['address']['town']['#attributes'] = array(
+    'parsley-required' => 'true',
+    'parsley-required-message' => t('Please fill in your town/city'),
+    'parsley-validation-minlength' => 0,
+    'parsley-trigger' => 'blur',
+  );
+
+  return $element;
+}
+
+/**
+ * After build callback for Comic Relief donations form payment type element.
+ */
+function cr_donate_form_build_payment_type($element) {
+  foreach (element_children($element) as $key) {
+    $element[$key]['#prefix'] = '<div class="donate-method-radio donate-method-' . $key . '">';
+    $element[$key]['#suffix'] = '</div>';
+  }
+
+  return $element;
+}
+
+/**
+ * Amount validation callback for Comic Relief donation form.
+ */
+function cr_donate_form_validate_amount($form, &$form_state) {
+  $values = $form_state['values'];
+
+  if ($values['amount'] < 1 || !preg_match('/^\d+(\.\d{1,2})?$/', $values['amount'])) {
+    form_set_error('amount', t('Please enter a valid amount'));
+  }
+  elseif ($values['amount'] > 5000) {
+    form_set_error('amount', t("Thanks for your generosity, but £5,000 is the most we're allowed to accept at one time"));
+  }
+}
+
+/**
+ * WorldPay items validation callback for Comic Relief donation form.
+ */
+function cr_donate_form_validate_worldpay($form, &$form_state) {
+  $values = $form_state['values'];
+
+  if (empty($values['MC_firstname'])) {
+    form_set_error('MC_firstname', t('Please fill in your first name'));
+  }
+
+  if (empty($values['MC_lastname'])) {
+    form_set_error('MC_lastname', t('Please fill in your last name'));
+  }
+
+  if (empty($values['email'])) {
+    form_set_error('email', t('Please fill in your email address'));
+  }
+  elseif (!valid_email_address($values['email'])) {
+    form_set_error('email', t('Please enter a valid email address'));
+  }
+
+  // Email confirmation field is hidden on mobile.
+  if ($values['platform'] == 'desktop') {
+    if (empty($values['email_confirm'])) {
+      form_set_error('email_confirm', t('Please fill in your email address'));
+    }
+    elseif ($values['email'] != $values['email_confirm']) {
+      form_set_error('email_confirm', t("The email addresses you entered don't match"));
+    }
+  }
+
+  if (empty($values['postcode'])) {
+    form_set_error('postcode', t('Please fill in your postcode'));
+  }
+
+  if (empty($values['address1'])) {
+    form_set_error('address1', t('Please fill in your address'));
+  }
+
+  if (empty($values['town'])) {
+    form_set_error('town', t('Please fill in your town/city'));
+  }
+
+  if (empty($values['paymentType'])) {
+    form_set_error('paymentType', t('Please select a payment method'));
+  }
+}
+
+/**
+ * PayPal submit callback for Comic Relief donation form.
+ */
+function cr_donate_form_submit_paypal($form, &$form_state) {
+  $values = array(
+    'returnURL' => base64_encode($form_state['values']['MC_url_redirect']),
+    'campaign' => $form_state['values']['MC_cr_donate_prefix'],
+    'amount' => $form_state['values']['amount'],
+    'currency' => $form_state['values']['currency'],
+    'platform' => $form_state['values']['platform'],
+    'giftaid' => $form_state['values']['MC_permission_giftaid'],
+    'track-src' => $form_state['values']['platform'] == 'mobile' ? $form_state['values']['cartId_mobile'] : $form_state['values']['cartId'],
+  );
+
+  // Determine PayPal application URL.
+  if (APPLICATION_ENV == 'development' || APPLICATION_ENV == 'cam-development') {
+    $url = 'http://dev-paypal.comicrelief.com/';
+  }
+  elseif (cr_donate_test_mode()) {
+    $url = 'https://staging-paypal.comicrelief.com/';
+  }
+  else {
+    $url = 'https://paypal.comicrelief.com/';
+  }
+
+  // Redirect to PayPal.
+  $form_state['redirect'] = array($url, array('query' => $values));
+}
+
+/**
+ * WorldPay submit callback for Comic Relief donation form.
+ */
+function cr_donate_form_submit_worldpay($form, &$form_state) {
+  $values = $form_state['values'];
+
+  // Use mobile cart ID, if platform is mobile.
+  if ($values['platform'] == 'mobile') {
+    $values['cartId'] = $values['cartId_mobile'];
+    $values['MC_trans_source'] = $values['cartId_mobile'];
+  }
+
+  // Remove unwanted fields.
+  $remove = array('platform', 'cartId_mobile', 'email_confirm', 'submit', 'form_build_id', 'form_token', 'form_id', 'op');
+  foreach ($remove as $field) {
+    unset($values[$field]);
+  }
+
+  // Map address fields.
+  $map = array(
+    'title' => 'MC_prefix',
+    'address1' => 'MC_address1',
+    'address2' => 'MC_address2',
+    'address3' => 'MC_address3',
+    'town' => 'MC_town',
+    'postcode' => 'MC_postcode',
+    'country' => 'MC_country',
+    'tel' => 'MC_telephone',
+  );
+  foreach ($map as $source => $dest) {
+    $values[$dest] = $values[$source];
+  }
+
+  // Map marketing preferences fields; 1 = yes, 0 = no, -1 = same as before
+  // Unchecking emails simply means "same as before"
+  if (!$values['MC_permission_email']) {
+    $values['MC_permission_email'] = -1;
+  }
+
+  // Send existing transaction ID, if any.
+  if (!empty($_SESSION['cr_donate_tid'])) {
+    $values['MC_tid'] = $_SESSION['cr_donate_tid'];
+    unset($_SESSION['cr_donate_tid']);
+  }
+
+  // Determine WorldPay transaction URL.
+  if (cr_donate_test_mode()) {
+    $url = 'https://secure-test.worldpay.com/wcc/purchase';
+  }
+  else {
+    $url = 'https://secure.worldpay.com/wcc/purchase';
+  }
+
+
+  // Update Giftaid message - this message is discarded after use in Worldpay
+  // This is not shown for fundraiser paying in donations
+  $email = isset($values['email']) ? $values['email'] : '';
+  $paying_in_data = FALSE;
+  $paying_in_data = cr_donate_check_has_paying_in_data($email);
+
+  if (!is_array($paying_in_data)) {
+    $giftaid_msg = ($values['MC_permission_giftaid'] == 1) ? 'Yes' : 'No';
+    $values['MC_giftaid_message'] = CR_DONATE_GIFTAID_MSG_PREFIX .
+      $giftaid_msg . '<br/>';
+
+    // Add Gift Aid explanation
+    $values['MC_giftaid_explanation'] = CR_DONATE_GIFTAID_MSG_EXPLANATION;
+  }
+
+  // Marshall the paying in data to pass through worldpay for inclusion in
+  // the email sent for a worldpay callback/return redirection failure
+  if (is_array($paying_in_data) && !empty($paying_in_data['option'])) {
+      $mc_paying_in_fields = cr_donate_get_worldpay_paying_in_fields($paying_in_data);
+      $values = array_merge($values, $mc_paying_in_fields);
+  }
+
+  // Redirect to WorldPay.
+  $form_state['redirect'] = array($url, array('query' => $values));
+}
+
+/**
+ * Determine if we are in test or live mode.
+ *
+ * @return
+ *   TRUE if we are in WorldPay test mode, FALSE otherwise.
+ */
+function cr_donate_test_mode() {
+  if (isset($_GET['wpaccount'])) {
+    switch ($_GET['wpaccount']) {
+      case 'test': return TRUE;
+      case 'live': return FALSE;
+    }
+  }
+
+  // Default to TRUE unless we are in production.
+  return !in_array(APPLICATION_ENV, array('production', 'cam-production'));
+}
+
+/**
+ * @return array
+ *   mappings between data keys used in initial post
+ *   to Worldpay and data keys used for storage
+ */
+function cr_donate_get_donation_data_map() {
+  return array(
+    'email'                     => 'email',
+    'MC_prefix'                 => 'prefix',
+    'MC_firstname'              => 'firstName',
+    'MC_lastname'               => 'lastName',
+    'MC_address1'               => 'address1',
+    'MC_address2'               => 'address2',
+    'MC_address3'               => 'address3',
+    'MC_town'                   => 'town',
+    'MC_postcode'               => 'postcode',
+    'MC_county'                 => 'county',
+    'MC_country'                => 'country',
+    'MC_mobile'                 => 'mobile',
+    'MC_telephone'              => 'telephone',
+    'MC_campaign'               => 'campaign',
+    'transTime'                 => 'wpTransTime',
+    'MC_trans_type'             => 'transType',
+    'MC_trans_source'           => 'transSource',
+    'MC_cr_source_url'          => 'transSourceUrl',
+    'transId'                   => 'transId',
+    'amount'                    => 'transAmount',
+    'currency'                  => 'transCurrency',
+    'transStatus'               => 'transStatus',
+    'cartId'                    => 'cartId',
+    'MC_permission_email'       => 'permissionEmail',
+    'MC_permission_post'        => 'permissionPost',
+    'rawAuthCode'               => 'wpRawAuthCode',
+    'rawAuthMessage'            => 'wpRawAuthMessage',
+    'ipAddress'                 => 'wpIpAddress',
+    'AVS'                       => 'wpAVS',
+    'countryMatch'              => 'wpCountryMatch',
+    'desc'                      => 'wpDesc',
+    'instId'                    => 'wpInstId',
+    'testMode'                  => 'wpTestMode',
+    'MC_permission_giftaid'     => 'giftAid',
+  );
+}
+
+/**
+ * Handle the worldpay callback
+ *
+ */
+function cr_donate_worldpay_complete(&$broker = null) {
+  //Maps the correct vars to the correct MQ api vars
+  $map = cr_donate_get_donation_data_map();
+
+    $post_data = array();
+  //Map the queue data
+  foreach ($_POST as $key => $val) {
+    //Only include the vars that have a mapping
+    if (array_key_exists($key, $map)) {
+      $post_data[$map[$key]] = $_POST[$key];
+    }
+  }
+
+  if (array_key_exists('transType', $post_data) === FALSE) {
+    $post_data['transType'] = CR_DONATE_MSG_TYPE;
+  }
+
+  // Load any additional data (paying in form) from ctools object cache.
+  ctools_include('object-cache');
+  $additional = ctools_object_cache_get('donate_pay_in', $post_data['email'], FALSE, 'donate_pay_in');
+  if (is_array($additional)) {
+    $post_data['paying_in'] = $additional;
+
+    // Delete the additional data so we don't send it twice.
+    ctools_object_cache_clear('donate_pay_in', $post_data['email'], 'donate_pay_in');
+  }
+
+  //Send the message
+  if (variable_get('cr_donate_transport_backend', CR_DONATE_DEFAULT_TRANSPORT_BACKEND) === 'message_queues') {
+    //WP uses java, java provides millisec
+    $post_data['timestamp'] = time();
+    if (!is_object($broker) || !$broker instanceof MessageBrokerInterface) {
+      $broker = message_broker_get();
+    }
+    $message_body = json_encode($post_data);
+    $exchange = variable_get('cr_message_queues_exchange', CR_MESSAGE_QUEUES_DEFAULT_EXCHANGE);
+    $broker->sendMessage($message_body,  $exchange, array('routing_key' => $exchange.'.donation', 'content_type' => 'application/json'));
+  }
+
+  $refresh_url = cr_donate_get_refresh_url();
+
+  //Let's send them to a slightly friendlier site
+  $refresh = array(
+    '#tag' => 'meta',
+    '#attributes' => array(
+      'http-equiv' => 'refresh',
+      'content' => '0;url=' . $refresh_url,
+    ),
+  );
+  drupal_add_html_head($refresh, 'cr_donate');
+  return theme('cr_donate_wp_complete', array('refresh_url' => $refresh_url));
+}
+
+  /**
+   * Return the refresh url based on the transaction status
+   *
+   * TODO: Ask PO - What if $_POST['transStatus'] non-existent or other value?
+   * @return string $refresh_url redirection URL
+   */
+  function cr_donate_get_refresh_url() {
+    if ($_POST['transStatus'] === 'Y') {
+      drupal_set_title('Payment Successful');
+      $refresh_url = url($_POST['MC_url_redirect'], array(
+        'absolute' => TRUE, 'query' => array(
+          'cartId' => $_POST['cartId'],
+          'transId' => $_POST['transId'],
+          'transTime' => $_POST['transTime'],
+          'amount' => $_POST['amount'],
+        )
+      ));
+    } elseif ($_POST['transStatus'] === 'C') {
+      drupal_set_title('Payment Canceled');
+      $refresh_url = url($_POST['MC_url_cancel'], array('absolute' => TRUE));
+    }
+
+    return $refresh_url;
+  }
+
+  /**
+ * Implements hook_panels_pane_content_alter
+ */
+function cr_donate_panels_pane_content_alter(&$content, $pane, $display_args, $display_context, $renderer, $display) {
+  // When displaying fundraising pay in page, we need to re-check pane access at this stage ino order to show the correct
+  // panes on page 1 / 2. By this stage we have already built pane content, so we unset the content if the access
+  // check fails. See DASP-3504 for details
+  if (isset($display_context['panel-node']) && $display_context['panel-node']->data->nid == 583) {
+    $access = panels_pane_access($pane, $display);
+    if (!$access) {
+      unset($content->content);
+    }
+  }
+}
+
+/**
+ * Detect the presence of fundraiser paying data -
+ * an array with a non-empty "option" value
+ * @param $email
+ * @return array | bool Fundraiser data or FALSE
+ */
+function cr_donate_check_has_paying_in_data($email) {
+  if (!is_string($email)) {
+    return FALSE;
+  }
+  // Load any additional data (paying in form) from ctools object cache.
+  ctools_include('object-cache');
+  $data = ctools_object_cache_get('donate_pay_in', $email, FALSE, 'donate_pay_in');
+  if (is_array($data) && !(empty($data['option']))) {
+    return $data;
+  }
+  return FALSE;
+}
+
+/**
+ * Retrieve flattened paying in fields
+ * @param array $data paying in data
+ * @return array paying data with Worldpay compatible keys
+ */
+function cr_donate_get_worldpay_paying_in_fields(array $data) {
+  $fields = array();
+  if (empty($data['option'])) {
+    return $fields;
+  }
+  $fields = array('MC_paying_in_option' => $data['option']);
+
+  foreach ($data as $key => $value) {
+    if ($key !== 'schoolContactDetails') {
+      $fields['MC_paying_in_' . $key] = $value;
+    }
+  }
+
+  if (isset($data['schoolContactDetails'])) {
+    foreach ($data['schoolContactDetails'] as $addr_key => $addr_value) {
+      if ($addr_key === 'schoolName') {
+        $fields['MC_paying_in_' . $addr_key] = $addr_value;
+      } else {
+        $fields['MC_paying_in_schools_' . $addr_key] = $addr_value;
+      }
+    }
+  }
+  return $fields;
+}

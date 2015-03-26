@@ -1,0 +1,15 @@
+<?php
+/**
+ * Implements hook_entity_info_alter()
+ */
+function cr_donate_promo_entity_info_alter(&$entity_info) {
+  $entity_info['fieldable_panels_pane']['bundles']['donate_promo'] = array(
+    'label' => t('Donate promo bar'),
+    'admin' => array(
+      'path' => 'admin/structure/fieldable-panels-panes/manage/%fieldable_panels_panes_type',
+      'bundle argument' => 4,
+      'real path' => 'admin/structure/fieldable-panels-panes/manage/donate-promo',
+      'access arguments' => array('administer fieldable panels panes'),
+    ),
+  );
+}

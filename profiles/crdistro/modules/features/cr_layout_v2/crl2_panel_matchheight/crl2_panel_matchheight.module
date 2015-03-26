@@ -1,0 +1,124 @@
+<?php
+/**
+ * @file
+ * Provides Match Height Grouping Functionality
+ */
+
+/*
+ * Alter the pane style settings so we can extend it with match height settings
+ * Implements hook_form_FORM_ID_alter
+ */
+function crl2_panel_matchheight_form_panels_edit_style_settings_form_alter(&$form, &$form_state, $form_id) {
+  // Simple check to ensure we are modifying the pane settings form and not another
+  if(!isset($form['settings']['use_columns'])) return;
+
+  // Get existing groups
+  $existing_groups = variable_get('matchheight_panel_groups', array(0=>"None"));
+
+  $form['settings']['use_matchheight'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('<strong>Match Height</strong>'),
+    '#default_value' => (isset($form_state['conf']['use_matchheight'])) ? $form_state['conf']['use_matchheight'] : '',
+  );
+
+  $form['settings']['matchheight'] = array(
+    '#type' => 'container',
+    '#description' => t('Grouped panes will match their height within a row. Visit !source for more info.', array('!source' => l('github project page','http://brm.io/jquery-match-height'))),
+    '#states' => array(
+      'visible' => array(
+        ':input[name="settings[use_matchheight]"]' => array('checked' => TRUE),
+      ),
+    ),
+  );
+
+  // Add new group option
+  $existing_groups['_new'] = t("Create Group");
+
+  // Select for existing groups
+  $form['settings']['matchheight']['group_existing'] = array(
+    '#type' => 'select',
+    '#title' => t('Match Height Group'),
+    '#options' => $existing_groups,
+    '#default_value' => isset($form_state['conf']['matchheight']['group_existing']) ? $form_state['conf']['matchheight']['group_existing'] : '_new',
+  );
+
+  // Text field for new groups
+  $form['settings']['matchheight']['group_new'] = array(
+    '#type' => 'textfield', 
+    '#title' => t('Create Group'), 
+    '#default_value' => '',
+    '#size' => 20, 
+    '#maxlength' => 40,
+    '#states' => array(
+      'visible' => array(
+        ':input[name="settings[matchheight][group_existing]"]' => array('value' => '_new'),
+      ),
+    ),
+  );
+
+  // Custom submit handler to add new groups
+  array_unshift($form['#submit'], 'crl2_panel_matchheight_form_panels_edit_style_settings_form_alter_submit');
+}
+
+/*
+ * Custom Form Submit handler to save additional variables
+ */
+function crl2_panel_matchheight_form_panels_edit_style_settings_form_alter_submit($form, &$form_state) {
+  $settings = &$form_state['values']['settings'];
+
+  if(!empty($settings['matchheight']['group_existing'])){
+    // We always use the existing group, so in this case we saved 
+    // a predefined group
+  }
+
+  // If we have a new group, make it sitewide available and set it as the default value
+  if(!empty($settings['matchheight']['group_new'])) {
+    // Get existing groups
+    $existing_groups = variable_get('matchheight_panel_groups', array(0=>"None"));
+
+    // Create a html class friendly version of the new group
+    $new_group_string = drupal_html_class($settings['matchheight']['group_new']);
+      
+    // Append to existing groups
+    $existing_groups[] = $new_group_string;
+
+    // Flip so we can access the keys by value
+    $existing_groups_by_key = array_flip($existing_groups);
+    
+    // Update settings with the new group and point to it.
+    $settings['matchheight']['group_existing'] = $existing_groups_by_key[$new_group_string];
+    
+    // Set group new to null
+    $settings['matchheight']['group_new'] = '';
+
+    // Store the sitewide variable
+    variable_set('matchheight_panel_groups', $existing_groups);
+
+    // Set message to let users know.
+    drupal_set_message(t('Created new Match Height Pane group.'));
+  }
+  $form_state['conf'] = $form_state['values']['settings'];
+}
+
+/*
+ * Implements HOOK_preprocess_panels_pane
+ */
+function crl2_panel_matchheight_preprocess_panels_pane(&$vars) {
+  if(!$vars || !isset($vars['pane'])) return;
+
+  // Check if we are using matchheight
+  if(is_object($vars['pane']) && isset($vars['pane']->style['style']) && $vars['pane']->style['style'] === 'pane' && isset($vars['pane']->style['settings']['matchheight']) && $vars['pane']->style['settings']['use_matchheight']) {
+
+    // Get existing groups
+    $existing_groups = variable_get('matchheight_panel_groups');
+
+    // Get the group key from the pane settings
+    $group_key = $vars['pane']->style['settings']['matchheight']['group_existing'];
+
+    if($group_key !== '_new') {
+      // Add the data attribute for match height
+      $vars['attributes_array']['data-mh'] = $existing_groups[$group_key];
+    }
+  }
+  
+}

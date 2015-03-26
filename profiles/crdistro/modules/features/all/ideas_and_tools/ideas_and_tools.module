@@ -1,0 +1,16 @@
+<?php
+/**
+ * @file
+ * Code for the Ideas and tools feature.
+ */
+
+include_once 'ideas_and_tools.features.inc';
+
+function ideas_and_tools_init() {
+		$path_alias = drupal_get_path_alias(current_path());
+		if (strpos($path_alias,'ideas-and-tools') !== false) {
+			drupal_add_js((drupal_get_path('module', 'ideas_and_tools') . '/js/ideas-and-tools.js'), array('weight' => -2));
+			drupal_add_css(drupal_get_path('module', 'ideas_and_tools') . '/css/ideas-and-tools.css');
+			drupal_add_js((drupal_get_path('module', 'ideas_and_tools') . '/js/filtered-pagination.js'), array('weight' => -3));
+		} 
+}

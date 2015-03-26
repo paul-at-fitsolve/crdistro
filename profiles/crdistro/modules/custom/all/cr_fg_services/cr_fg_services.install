@@ -1,0 +1,5 @@
+<?php
+
+function cr_kids_uninstall() {
+  variable_del('cr_kids_rude_words');
+}

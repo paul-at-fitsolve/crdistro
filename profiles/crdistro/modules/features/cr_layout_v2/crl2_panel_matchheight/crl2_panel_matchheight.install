@@ -1,0 +1,19 @@
+<?php
+/**
+ * @file
+ * Drupal needs this blank file.
+ */
+/**
+ * Implements hook_install().
+ */
+function crl2_panel_matchheight_install() {
+  variable_set('matchheight_panel_groups', array());
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function crl2_panel_matchheight_uninstall() {
+  // Unset matchheight panel groups
+  variable_del('matchheight_panel_groups');
+}

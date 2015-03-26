@@ -1,0 +1,5 @@
+name = cr_general
+description = Some common front-end related functions for our sites (eg. custom formatters)
+core = 7.x
+package = "CR Layout V1"
+files[] = cr_general_formatters.inc

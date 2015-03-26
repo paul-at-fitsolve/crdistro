@@ -1,0 +1,892 @@
+<?php
+/**
+ * @file
+ * .module file for cr_marketing_prefs module
+ *
+ * This module is used to configure the email header and ESU Strip.
+ *
+ * @author Updated by: Carl Hinton for Comic Relief.
+ * @date 10th February 2015
+ */
+
+/**
+ * Implements hook_bean_types_api_info().
+ */
+function cr_marketing_prefs_bean_types_api_info() {
+  return array('api' => 4);
+}
+
+/**
+ * Default transport backend
+ */
+define('CR_MARKETING_PREFS_ESU_DEFAULT_TRANSPORT_BACKEND', 'webservices');
+
+/**
+ * Default copy
+ */
+define('CR_MARKETING_PREFS_HEADER_THANKYOU_INTRO', '<h2>Splendid. Now we know what’s right for you.</h2> Why not have a peek at some <a href="/schools" title="Handy schools resources">handy schools resources</a> now?');
+define('CR_MARKETING_PREFS_HEADER_STEP1_THANKYOU_INTRO', '<h2>Thanks! Your first email will be with you shortly.</h2>');
+define ('CR_MARKETING_PREFS_HEADER_TEACHER_SELECT_TITLE', '<span>Also send me teacher resources</span>');
+define ('CR_MARKETING_PREFS_ERROR_MESSAGE', 'Something went wrong, please try again.');
+define ('CR_MARKETING_PREFS_MSG_TYPE', 'subscribe');
+/**
+ * Implements hook_menu().
+ */
+function cr_marketing_prefs_menu() {
+  $items = array();
+  $items['admin/config/services/cr/cr_marketing_prefs'] = array(
+    'title' => 'Marketing Prefs',
+    'description' => 'Configure the Comic Relief marketing preferences service.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cr_marketing_prefs_settings_form'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'cr_marketing_prefs.admin.inc',
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function cr_marketing_prefs_theme($existing, $type, $theme, $path) {
+  return array(
+    'cr_marketing_prefs_promo_form' => array(
+      'render element' => 'form',
+      'template' => 'cr-marketing-prefs-promo-form',
+      'pattern' => 'cr-marketing-prefs-promo-form__',
+    ),
+    'cr_marketing_prefs_header_form' => array(
+      'render element' => 'form',
+      'template' => 'cr-marketing-prefs-header-form',
+    ),
+  );
+}
+
+/**
+ * Implements hook_bean_types().
+ */
+function cr_marketing_prefs_bean_types() {
+  $plugins = array();
+
+  $plugins['cr_optional_info'] = array(
+    'label' => t('Marketing preferences: optional info'),
+    'handler' => array(
+      'class' => 'CrOptionalInformationBean',
+      'parent' => 'BeanPlugin',
+    ),
+  );
+
+  return $plugins;
+}
+
+/**
+ * Implements hook_bean_access().
+ *
+ * All users can view the email signup blocks.
+ */
+function cr_marketing_prefs_bean_access($bean, $op, $account) {
+  if ($op == 'view') {
+    switch ($bean->type) {
+      case 'cr_optional_info':
+        return TRUE;
+    }
+  }
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function cr_marketing_prefs_block_info() {
+  $blocks['esu_header'] = array(
+    'info' => t('Email signup (page header only)'),
+    'cache' => DRUPAL_NO_CACHE,
+  );
+
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function cr_marketing_prefs_block_view($delta = '') {
+  $block = array('subject' => NULL);
+
+  switch ($delta) {
+    case 'esu_header':
+      $block['content']['close']['#markup'] = '<a href="#" class="close-button">X</a>';
+      $block['content']['form'] = drupal_get_form('cr_marketing_prefs_header_form');
+      break;
+  }
+  return $block;
+}
+
+/**
+ * Email signup form for header on all pages.
+ *
+ * Separate from the other ESU forms so we don't have form reuse/ID clashes.
+ */
+function cr_marketing_prefs_header_form($form, &$form_state) {
+  $form['#theme'] = array('cr_marketing_prefs_header_form');
+
+  $form['#attributes']['class'][] = 'cr-marketing-prefs-header-form';
+
+  if (empty($form_state['values']['step'])) {
+    $form['#attributes']['class'][] = 'cr-marketing-prefs-header-form-general clearfix';
+
+    $form_conf = array(
+      'intro_markup' => variable_get('cr_marketing_prefs_header_general_intro', ''),
+      'source' => CR_CAMPAIGN_ID . '_ESU_HeaderWidget',
+      'source_mobile' => CR_CAMPAIGN_ID . '_Mob_ESU_HeaderWidget',
+    );
+
+    // ignore email signup.
+    $form['promoprefs_explanation'] = array(
+      '#type'    => 'markup',
+      '#markup'  => '<p class="promoprefs" id="form-item-comment-promoprefs">' .
+        'If you can see the "promoprefs" field below, it should be ' .
+        'left blank, as it is for testing purposes' .
+        '</p>',
+    );
+
+    $form['promoprefs'] = array(
+      '#type' => 'textfield',
+      '#default_value' => '',
+      '#weight' => -10,
+      '#placeholder' => t('subject'),
+      '#attributes' => array(
+        'class' => array('promoprefs'),
+        'id' => array('promoprefs'),
+      ),
+    );
+
+    $form = cr_marketing_prefs_general_form($form, $form_state, $form_conf);
+
+    return $form;
+  }
+  elseif ($form_state['values']['step'] == 'teacher') {
+    //Clearfix needed as dk is floated
+    $form['#attributes']['class'][] = 'cr-marketing-prefs-header-form-teacher clearfix';
+
+    $form_conf['intro_markup'] = filter_xss_admin(variable_get(
+      'cr_marketing_prefs_header_step1_thankyou_intro',
+      CR_MARKETING_PREFS_HEADER_STEP1_THANKYOU_INTRO
+    ));
+
+    $form_conf['teacher_select_title'] = filter_xss_admin(variable_get(
+      'cr_marketing_prefs_header_teacher_select_title',
+      CR_MARKETING_PREFS_HEADER_TEACHER_SELECT_TITLE
+    ));
+
+    return cr_marketing_prefs_teacher_form($form, $form_state, $form_conf);
+  }
+  else {
+    $form['#attributes']['class'][] = 'cr-marketing-prefs-header-form-complete';
+
+    $form_conf['intro_markup'] = filter_xss_admin(variable_get(
+      'cr_marketing_prefs_header_thankyou_intro',
+      CR_MARKETING_PREFS_HEADER_THANKYOU_INTRO
+    ));
+    return cr_marketing_prefs_thankyou_form($form, $form_state, $form_conf);
+  }
+}
+
+/**
+ * Email signup form for promos.
+ *
+ * Similar to header form, with a different ID and more configuration.
+ */
+function cr_marketing_prefs_promo_form($form, &$form_state, $conf) {
+  $form['#attributes']['class'][] = 'cr-marketing-prefs-promo-form';
+
+  if (empty($form_state['values']['step'])) {
+    $form['#theme'] = 'cr_marketing_prefs_promo_form__general';
+    $form['#attributes']['class'][] = 'cr-marketing-prefs-promo-form-general';
+
+    $form_conf = array(
+      'intro_markup' => $conf['intro_copy'],
+      'source' => $conf['source'],
+      'source_mobile' => $conf['source_mobile'],
+    );
+
+    return cr_marketing_prefs_general_form($form, $form_state, $form_conf);
+  }
+  elseif ($form_state['values']['step'] == 'teacher') {
+    $form['#theme'] = 'cr_marketing_prefs_promo_form__teacher';
+    $form['#attributes']['class'][] = 'cr-marketing-prefs-promo-form-teacher';
+    $form_conf = array(
+      'intro_markup' => $conf['teacher_copy'],
+      'teacher_select_title' => $conf['teacher_select_title'],
+    );
+
+    return cr_marketing_prefs_teacher_form($form, $form_state, $form_conf);
+  }
+  else {
+    $form['#theme'] = 'cr_marketing_prefs_promo_form__complete';
+    $form['#attributes']['class'][] = 'cr-marketing-prefs-promo-form-complete';
+    $form_conf['intro_markup'] = $conf['thankyou_copy'];
+    return cr_marketing_prefs_thankyou_form($form, $form_state, $form_conf);
+  }
+}
+
+/**
+ * Ajax callback: Email signup header form.
+ */
+function cr_marketing_prefs_form_ajax($form, &$form_state) {
+  $commands = array();
+  $selector = '.' . $form['#attributes']['class'][0];
+  $commands[] = ajax_command_replace($selector, drupal_render($form));
+  $commands[] = ajax_command_prepend($selector, theme('status_messages'));
+  return array('#type' => 'ajax', '#commands' => $commands);
+}
+
+/**
+ * Email signup form for header, general step.
+ */
+function cr_marketing_prefs_general_form($form, &$form_state, $conf) {
+  $form['intro']['#markup'] = filter_xss_admin($conf['intro_markup']);
+
+  $form['email'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Enter your email address'),
+    '#title_display' => 'invisible',
+    '#default_value' => isset($form_state['values']['email']) ? $form_state['values']['email'] : '',
+    '#placeholder' => t('Enter your email address'),
+    '#maxlength' => 100,
+    '#attributes' => array('autofocus' => 'autofocus'),
+  );
+
+  $form['source'] = array(
+    '#type' => 'value',
+    '#value' => $conf['source'],
+  );
+
+  $form['source_mobile'] = array(
+    '#type' => 'value',
+    '#value' => $conf['source_mobile'],
+  );
+
+  $form['sourceUrl'] = array(
+    '#type' => 'value',
+    '#value' => url(current_path(), array('absolute' => TRUE)),
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Go'),
+    '#weight' => 10,
+    '#ajax' => array(
+      'callback' => 'cr_marketing_prefs_form_ajax',
+      'progress' => array(),
+      'event' => 'click', // This allows the Enter key to submit the Ajax form.
+    ),
+    '#attributes' => array(
+      'class' => array('button--dark-grey'),
+    ),
+  );
+
+  // Desktop or mobile platform flag.
+  $form['platform'] = array(
+    '#type' => 'hidden',
+    '#default_value' => 'desktop',
+  );
+
+  $form['#validate'][] = 'cr_marketing_prefs_general_form_validate';
+  $form['#submit'][] = 'cr_marketing_prefs_general_form_submit';
+
+  return $form;
+}
+
+/**
+ * Validation callback: Email signup header form, general step.
+ */
+function cr_marketing_prefs_general_form_validate($form, &$form_state) {
+  // Validate email address.
+  if (empty($form_state['values']['email'])) {
+    form_set_error('email', t('Please fill in your email address'));
+  }
+  elseif (!valid_email_address($form_state['values']['email'])) {
+    form_set_error('email', t('Please enter a valid email address'));
+  }
+
+
+}
+
+/**
+ * Submit callback: Email signup header form, general step.
+ */
+function cr_marketing_prefs_general_form_submit($form, &$form_state,
+                                                $mock = NULL) {
+
+  $form_state['rebuild'] = TRUE;
+
+  // Honey pot test.
+  if (isset($form_state['values']['promoprefs']) && !empty($form_state['values']['promoprefs'])) {
+    $form_state['values']['step'] = 'complete';
+    return;
+  }
+  
+  $data = array(
+    'email' => $form_state['values']['email'],
+    'lists' => array('general' => 'general'),
+    'source' => $form_state['values']['platform'] == 'mobile' ? $form_state['values']['source_mobile'] : $form_state['values']['source'],
+    'sourceUrl' => $form_state['values']['sourceUrl'],
+    'sendEmail' => FALSE,
+  );
+
+  $ok = cr_marketing_prefs_subscribe('marketing_general', $data, $mock);
+
+  if (!$ok) {
+    drupal_set_message(CR_MARKETING_PREFS_ERROR_MESSAGE, 'error');
+  }
+  else {
+    $form_state['values']['step'] = 'teacher';
+  }
+}
+
+/**
+ * Email signup form for header, teacher step.
+ */
+function cr_marketing_prefs_teacher_form($form, &$form_state, $conf) {
+  $form['intro']['#markup'] = filter_xss_admin($conf['intro_markup']);
+
+  // Copy values from previous submission.
+  foreach (array('email', 'source', 'source_mobile', 'sourceUrl', 'platform') as $field) {
+    $form[$field] = array(
+      '#type' => 'value',
+      '#value' => $form_state['values'][$field],
+    );
+  }
+
+  $form['phase'] = array(
+    '#type' => 'select',
+    '#title' => filter_xss_admin($conf['teacher_select_title']),
+    '#default_value' => '',
+    '#options' => cr_marketing_get_age_group_options(),
+  );
+
+  $form['step'] = array(
+    '#type' => 'hidden',
+    '#value' => 'teacher',
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+    '#ajax' => array(
+      'callback' => 'cr_marketing_prefs_form_ajax',
+      'progress' => array(),
+    ),
+    '#attributes' => array(
+      'class' => array('button--dark-grey'),
+    ),
+  );
+
+  $form['#validate'][] = 'cr_marketing_prefs_teacher_form_validate';
+  $form['#submit'][] = 'cr_marketing_prefs_teacher_form_submit';
+
+  return $form;
+}
+
+/**
+ * Provides the set of options for age group select box
+ *
+ * @return array
+ */
+function cr_marketing_get_age_group_options() {
+  return array(
+    '' => t('Select age group'),
+    'EY' => t('Nurseries'),
+    'PY' => t('Primary'),
+    'SY' => t('Secondary'),
+    'FE' => t('Sixth form/FE college'),
+  );
+}
+
+/**
+ * Validation callback: Email signup header form, teacher step.
+ */
+function cr_marketing_prefs_teacher_form_validate($form, &$form_state) {
+  // Teachers must select an age group.
+  if (empty($form_state['values']['phase'])) {
+    form_set_error('phase', t('Please select an age group'));
+  }
+}
+
+/**
+ * Submit callback: Email signup header form, teacher step.
+ */
+function cr_marketing_prefs_teacher_form_submit($form, &$form_state, $mock = NULL) {
+  $form_state['rebuild'] = TRUE;
+
+  $data = array(
+    'email' => $form_state['values']['email'],
+    'phase' => $form_state['values']['phase'],
+    'lists' => array('teacher' => 'teacher'),
+    'source' => $form_state['values']['platform'] == 'mobile' ? $form_state['values']['source_mobile'] : $form_state['values']['source'],
+    'sourceUrl' => $form_state['values']['sourceUrl'],
+    'sendEmail' => FALSE,
+  );
+
+  $ok = cr_marketing_prefs_subscribe('marketing_teacher', $data, $mock);
+
+  if (!$ok) {
+    drupal_set_message(CR_MARKETING_PREFS_ERROR_MESSAGE, 'error');
+  }
+  else {
+    $form_state['values']['step'] = 'complete';
+  }
+}
+
+/**
+ * Email signup form for header, thankyou step.
+ */
+function cr_marketing_prefs_thankyou_form($form, &$form_state, $conf) {
+  $form['intro']['#markup'] = filter_xss_admin($conf['intro_markup']);
+
+  return $form;
+}
+
+/**
+ * Email signup form, for pods etc.
+ */
+function cr_marketing_prefs_signup_form($form, &$form_state, $conf) {
+  // Add JavaScript and class to handle thank you content.
+  $form['#attached']['js'][] = drupal_get_path('module', 'cr_marketing_prefs') . '/cr_marketing_prefs.js';
+  $form['#attributes']['class'][] = 'cr-marketing-prefs-signup-form';
+
+  $form['email'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Enter email address') . ' ' . theme('form_required_marker'),
+    '#title_display' => 'invisible',
+    '#default_value' => isset($form_state['values']['email']) ? $form_state['values']['email'] : '',
+    '#placeholder' => t('Enter your email'),
+    '#maxlength' => 100,
+  );
+
+  if ($conf['teacher'] == 'checkbox') {
+    $form['teacher'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('I want stuff for schools'),
+    );
+  }
+  else {
+    // Force teacher checkbox to be always checked.
+    $form['teacher'] = array(
+      '#type' => 'value',
+      '#value' => $conf['teacher'] == 'always',
+    );
+  }
+
+  if ($conf['teacher'] != 'never') {
+    $form['phase'] = array(
+      '#type' => 'select',
+      '#default_value' => '',
+      '#options' => cr_marketing_get_age_group_options,
+    );
+  }
+
+  // If the teacher checkbox is shown, hide the phase until the teacher is selected.
+  if ($conf['teacher'] == 'checkbox') {
+    unset($form['phase']['#options']['']);
+    $form['phase']['#default_value'] = 'EY';
+    $form['phase']['#states'] = array(
+      'visible' => array(
+        ':input[name="teacher"]' => array('checked' => TRUE),
+      ),
+    );
+  }
+
+  $form['source'] = array(
+    '#type' => 'value',
+    '#value' => $conf['source'],
+  );
+  $form['source_mobile'] = array(
+    '#type' => 'value',
+    '#value' => $conf['source_mobile'],
+  );
+  $form['sourceUrl'] = array(
+    '#type' => 'value',
+    '#value' => url(current_path(), array('absolute' => TRUE)),
+  );
+
+  // Desktop or mobile platform flag.
+  $form['platform'] = array(
+    '#type' => 'hidden',
+    '#default_value' => 'desktop',
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Go'),
+  );
+  $form['privacy'] = array(
+    '#type' => 'markup',
+    '#markup' => '<p class="privacy">' . l(t('Privacy policy'), 'privacy-policy', array('attributes' => array('target' => '_blank'))) . '</p>',
+  );
+
+  return $form;
+}
+
+/**
+ * Validation callback: Email signup form.
+ */
+function cr_marketing_prefs_signup_form_validate($form, &$form_state) {
+  // Validate first name field, if used.
+  if (isset($form['first_name']) && empty($form_state['values']['first_name'])) {
+    form_set_error('first_name', t('Please fill in your first name'));
+  }
+
+  // Validate email address.
+  if (empty($form_state['values']['email'])) {
+    form_set_error('email', t('Please fill in your email address'));
+  }
+  elseif (!valid_email_address($form_state['values']['email'])) {
+    form_set_error('email', t('Please enter a valid email address'));
+  }
+
+  // Teachers must select an age group.
+  if (!empty($form_state['values']['teacher']) && empty($form_state['values']['phase'])) {
+    form_set_error('phase', t('Please select an age group'));
+  }
+}
+
+/**
+ * Submit callback: Email signup form.
+ */
+function cr_marketing_prefs_signup_form_submit($form, &$form_state, $mock = NULL) {
+  $method = 'general';
+
+  // 'lists' must have keys set as well as values, webservices relies on this!
+  $data = array(
+    'email' => $form_state['values']['email'],
+    'lists' => array('general' => 'general'),
+    'source' => $form_state['values']['platform'] == 'mobile' ? $form_state['values']['source_mobile'] : $form_state['values']['source'],
+    'sourceUrl' => $form_state['values']['sourceUrl'],
+    'sendEmail' => FALSE,
+  );
+
+  // If they ticked the teacher checkbox, sign them up for the
+  // teacher list as well, and record their area (phase).
+  if (!empty($form_state['values']['teacher'])) {
+    $method = 'teacher';
+    $data['lists']['teacher'] = 'teacher';
+    $data['phase'] = $form_state['values']['phase'];
+  }
+
+  if (isset($form['first_name'])) {
+    $data['firstName'] = $form_state['values']['first_name'];
+  }
+
+  $ok = cr_marketing_prefs_subscribe('marketing_' . $method, $data, $mock);
+
+  if (!$ok) {
+    drupal_set_message(CR_MARKETING_PREFS_ERROR_MESSAGE, 'error');
+  }
+  else {
+    $form_state['redirect'] = array(current_path(), array('fragment' => 'thanks'));
+  }
+}
+
+
+/**
+ * Message queue helper
+ */
+function _cr_donate_prepare_for_message_queue($data) {
+  $map = array(
+    'source' => 'transSource',
+    'sourceUrl' => 'transSourceUrl',
+    'email' => 'email',
+    'phase' => 'phase',
+    'campaign' => 'campaign',
+    'lists' => 'lists',
+    'timestamp' => 'timestamp',
+    'transType' => 'transType',
+  );
+
+  //The consumer gets upset if we include data not relevant
+  $exclude = array(
+    'sendEmail',
+  );
+
+  $return = array();
+  //Map the queue data
+  foreach ($data as $key => $val) {
+    //Only include vars that have a mapping
+    if (array_key_exists($key, $map) && array_key_exists($key, $exclude) === FALSE) {
+      $return[$map[$key]] = $val;
+    }
+  }
+  return $return;
+
+}
+
+/**
+ * Web services call to subscribe an email address to a list.
+ *
+ * @return
+ *   TRUE on success, FALSE on failure.
+ */
+function cr_marketing_prefs_subscribe($method, $data, &$broker = NULL) {
+  $data['campaign'] = CR_CAMPAIGN_ID;
+  try {
+    switch (variable_get('cr_marketing_prefs_esu_transport_backend', CR_MARKETING_PREFS_ESU_DEFAULT_TRANSPORT_BACKEND)) {
+    case 'message_queues':
+      if (!is_object($broker) || !$broker instanceof MessageBrokerInterface) {
+        $broker = message_broker_get();
+      }
+      $exchange = variable_get('cr_message_queues_exchange', CR_MESSAGE_QUEUES_DEFAULT_EXCHANGE);
+      $msg_data = _cr_donate_prepare_for_message_queue($data);
+      //Dummy data so webservices accepts it
+      $msg_data['firstName'] = ' ';
+      $msg_data['sendEmail'] = FALSE;
+      //Timestamp to know when user signed up
+      if (empty($msg_data['timestamp'])) {
+        $msg_data['timestamp'] = time();
+      }
+      $msg_data['transType'] = CR_MARKETING_PREFS_MSG_TYPE;
+      $message_body = json_encode($msg_data);
+      $broker->sendMessage($message_body,  $exchange, array('routing_key' => $exchange . '.esu', 'content_type' => 'application/json'));
+      break;
+    case 'webservices':
+      if (is_object($broker) && $broker instanceof WSClientServiceDescription) {
+        $service = $broker;
+      }
+      else {
+        $service = wsclient_service_load('cr_marketing_preferences');
+      }
+
+        $result = $service->invoke($method, $data);
+
+        //Store transaction ID for future use.
+        $_SESSION['cr_marketing_prefs_tid'] =  $result['tid'];
+        break;
+    }
+  }
+  catch (MessageBrokerException $mbe) {
+    watchdog('cr_marketing_prefs', 'Message Queues: !error', array('!error' => $mbe->getMessage(), WATCHDOG_ERROR));
+    return FALSE;
+  }
+  catch (WSClientException $e) {
+    watchdog('cr_marketing_prefs', 'Web Services: !error', array('!error' => $e->getMessage(), WATCHDOG_ERROR));
+    return FALSE;
+  }
+
+  // Send a welcome email, if this is a "general" signup.
+  if ($method == 'marketing_general') {
+    cr_marketing_prefs_welcome($data['email']);
+  }
+
+  return TRUE;
+}
+
+/**
+ * Campaign Commander call to send a welcome email.
+ */
+function cr_marketing_prefs_welcome($email) {
+  $query = array(
+    'random' => variable_get('cr_marketing_prefs_cc_random', ''),
+    'encrypt' => variable_get('cr_marketing_prefs_cc_security', ''),
+    'email' => $email,
+    'senddate' => '2014-01-01 00:00:00', // Past dates always send immediately
+    'uidkey' => 'EMAIL',
+    'stype' => 'NOTHING',
+  );
+
+  if ($query['random'] && $query['encrypt']) {
+    $url = url('http://api.notificationmessaging.com/NMSREST', array('query' => $query));
+    $result = drupal_http_request($url);
+    if ($result->code != 200) {
+      watchdog('cr_marketing_prefs', 'Campaign Commander error: !error', array('!error' => $result->data), WATCHDOG_ERROR);
+    }
+  }
+}
+
+/**
+ * Optional info form for thankyou page.
+ */
+function cr_marketing_prefs_optional_info_form($form, &$form_state, $settings) {
+  // Merge in default copy, and store all settings in form for later use.
+  $defaults = CrOptionalInformationBean::defaults();
+  $settings['copy'] = array_filter($settings['copy']) + $defaults['copy'];
+  $form['#bean_settings'] = $settings;
+
+  $form['#prefix'] = '<div id="cr-marketing-prefs-optional-info">';
+  $form['#suffix'] = '</div>';
+
+  //Some JS to make equalheights JS recalc
+  $form['#attached']['js'] = array(
+    drupal_get_path('module', 'cr_marketing_prefs') . '/cr_marketing_prefs_optional_info.js',
+  );
+
+  $form['title'] = array(
+    '#prefix' => '<h2>',
+    '#markup' => check_plain(@$settings['copy']['title']),
+    '#suffix' => '</h2>',
+  );
+
+  if (!empty($form_state['complete'])) {
+    // Form complete.
+    $form['#prefix'] = '<div id="cr-marketing-prefs-optional-info" class="cr-marketing-prefs-optional-info-complete">';
+    $form['title']['#markup'] = check_plain(@$settings['copy']['thank_you_title']);
+    $form['thank-you-image'] = array(
+      '#type' => 'item',
+      '#markup' => theme('image', array('path' => drupal_get_path('module', 'cr_marketing_prefs') .
+        '/thankyou-nose.png')),
+    );
+  }
+  else {
+    // Form incomplete.
+    if (@$settings['copy']['intro']) {
+      $form['intro'] = array(
+        '#prefix' => '<p class="signup-intro">',
+        '#markup' => @$settings['copy']['intro'],
+        '#suffix' => '</p>',
+      );
+    }
+    if (!isset($_GET['first_name']) || $_GET['first_name'] != 'skip') {
+      $form['first_name'] = array(
+        '#type' => 'textfield',
+        '#title' => t('First name') . ' ' . theme('form_required_marker'),
+        '#title_display' => 'invisible',
+        '#placeholder' => t('First name'),
+        '#maxlength' => 25,
+      );
+    }
+    $form['postcode'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Postcode'),
+      '#title_display' => 'invisible',
+      '#placeholder' => t('Postcode'),
+      '#maxlength' => 15,
+    );
+    $form['organisation'] = array(
+      '#type' => 'radios',
+      '#title' => t('Are you thinking of fundraising as part of an organisation?'),
+      '#options' => array(
+        1 => t('Yes'),
+        0 => t('No'),
+      ),
+      '#default_value' => 0,
+    );
+    $form['organisation_detail'] = array(
+      '#type' => 'fieldset',
+      '#attributes' => array('class' => array('cr-marketing-prefs-organisation')),
+      '#states' => array(
+        'visible' => array(
+          ':input[name="organisation"]' => array('value' => "1"),
+        ),
+      ),
+    );
+    $form['organisation_detail']['organisation_detail'] = array(
+      '#type' => 'cr_partner_organisation',
+      '#description' => 'If your company is not listed, please select other to enter the name of it here',
+      '#skip_validation' => TRUE,
+    );
+
+    $form['source'] = array(
+      '#type' => 'value',
+      '#value' => $settings['source'],
+    );
+    $form['sourceUrl'] = array(
+      '#type' => 'value',
+      '#value' => url(current_path(), array('absolute' => TRUE)),
+    );
+
+    $form['submit'] = array(
+      '#type' => 'submit',
+      '#value' => t('Save changes'),
+      '#ajax' => array(
+        'callback' => 'cr_marketing_prefs_optional_info_form_ajax',
+      ),
+    );
+
+    $form['privacy'] = array(
+      '#markup' => '<p class="privacy">' . l(t('Privacy policy'), 'privacy-policy', array('attributes' => array('target' => '_blank'))) . '</p>',
+    );
+  }
+
+  return $form;
+}
+
+/**
+ * Ajax callback: Optional info form.
+ */
+function cr_marketing_prefs_optional_info_form_ajax($form, &$form_state) {
+  $commands = array();
+  $commands[] = ajax_command_replace('#cr-marketing-prefs-optional-info', drupal_render($form));
+  $commands[] = ajax_command_prepend('#cr-marketing-prefs-optional-info', theme('status_messages'));
+  $commands[] = ajax_command_invoke(NULL, 'crInvokeEqualHeights');
+  return array('#type' => 'ajax', '#commands' => $commands);
+}
+
+/**
+ * Validation callback: Optional info form.
+ */
+function cr_marketing_prefs_optional_info_form_validate($form, &$form_state) {
+  if (isset($form_state['values']['first_name'])) {
+    if (empty($form_state['values']['first_name'])) {
+      form_set_error('first_name', t('Please fill in your first name'));
+      $form_state['rebuild'] = TRUE;
+    }
+  }
+
+  if (!empty($form_state['values']['organisation'])) {
+    if ($form_state['values']['organisation_name'] == 'Other' && empty($form_state['values']['organisation_other'])) {
+      form_set_error('organisation_other', t('Please fill in your organisation'));
+      $form_state['rebuild'] = TRUE;
+    }
+
+    $groups = array('Air Cadets', 'GirlGuiding UK', 'Sea Cadets');
+    if (in_array($form_state['values']['organisation_name'], $groups) && empty($form_state['values']['organisation_group'])) {
+      form_set_error('organisation_group', t('Please fill in your group name'));
+      $form_state['rebuild'] = TRUE;
+    }
+  }
+}
+
+/**
+ * Submit callback: Optional info form.
+ */
+function cr_marketing_prefs_optional_info_form_submit($form, &$form_state) {
+  $data = array(
+    'tid' => isset($_SESSION['cr_marketing_prefs_tid']) ? $_SESSION['cr_marketing_prefs_tid'] : 0,
+    'postcode' => $form_state['values']['postcode'],
+  );
+  if (isset($form_state['values']['first_name'])) {
+    $data['firstName'] = $form_state['values']['first_name'];
+  }
+  if (!empty($form_state['values']['organisation'])) {
+    switch ($form_state['values']['organisation_name']) {
+      case 'Other':
+        $data['group_affiliation'] = $form_state['values']['organisation_other'];
+        break;
+
+      case 'Air Cadets':
+      case 'GirlGuiding UK':
+      case 'Sea Cadets':
+        $data['group_affiliation'] = $form_state['values']['organisation_name'] . '|' . $form_state['values']['organisation_group'];
+        break;
+
+      default:
+        $data['group_affiliation'] = $form_state['values']['organisation_name'];
+    }
+  }
+
+  $ok = cr_marketing_prefs_subscribe('marketing_general', $data);
+  if ($ok) {
+    $form_state['complete'] = TRUE;
+  }
+  else {
+    drupal_set_message(CR_MARKETING_PREFS_ERROR_MESSAGE, 'error');
+  }
+
+  $form_state['rebuild'] = TRUE;
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function cr_marketing_prefs_ctools_plugin_directory($module, $plugin) {
+  if ($module == 'ctools' && !empty($plugin)) {
+    return "plugins/$plugin";
+  }
+}

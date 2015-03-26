@@ -1,0 +1,5 @@
+name = CR Panel Slider
+description = Display panel panes as a slider
+core = 7.x
+package = "CR Layout V1"
+version = 7.x-1.0

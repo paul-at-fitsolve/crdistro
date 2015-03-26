@@ -1,0 +1,14 @@
+name = cr_donate_money_buy
+core = 7.x
+package = "Comic Relief"
+dependencies[] = features
+dependencies[] = filefield_paths
+dependencies[] = image
+dependencies[] = number
+dependencies[] = picture
+dependencies[] = text
+features[features_api][] = api:1
+features[field_base][] = field_amount
+features[field_instance][] = fieldable_panels_pane-donate_money_buy-field_amount
+features[field_instance][] = fieldable_panels_pane-donate_money_buy-field_body
+features[field_instance][] = fieldable_panels_pane-donate_money_buy-field_image

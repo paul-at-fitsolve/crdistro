@@ -1,0 +1,5 @@
+name = Fun and Games Services
+description = General module to capture common functionality between the fun and games services
+core = 7.x
+package = "Comic Relief"
+version = "7.x-1.0"

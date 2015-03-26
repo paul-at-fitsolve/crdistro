@@ -1,0 +1,14 @@
+<?php
+
+function cr_message_queues_install() {
+  $message_broker_config = variable_get('message_broker_amqp_config', '');
+  if (empty($message_broker_config)) {
+    $json_loc = drupal_get_path('module', 'cr_message_queues').'/cr_message_queues.json';
+    variable_set('message_broker_amqp_config', $json_loc);
+  }
+
+  $message_broker_implementation = variable_get('message_broker_implementation');
+  if (empty($message_broker_implementation)) {
+    variable_set('message_broker_implementation', 'amqp');
+  }
+}

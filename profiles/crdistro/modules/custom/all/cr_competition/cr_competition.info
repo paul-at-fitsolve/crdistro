@@ -1,0 +1,10 @@
+name = CR Competition
+description = Provides form for competition (and ESU) entry and welcome emails
+core = 7.x
+package = "Comic Relief"
+php = 5.2.4
+dependencies[] = cr_transaction_emails
+dependencies[] = cr_marketing_prefs
+dependencies[] = cr_message_queues
+dependencies[] = ctools
+dependencies[] = elements

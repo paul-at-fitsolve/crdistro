@@ -1,0 +1,9 @@
+name = Donations
+description = Provides donation blocks and forms.
+core = 7.x
+package = "Comic Relief"
+dependencies[] = cr_plus
+dependencies[] = ctools
+dependencies[] = elements
+files[] = cr_donate.test
+stylesheets[all][] = cr_donate.css

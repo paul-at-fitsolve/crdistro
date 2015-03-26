@@ -1,0 +1,13 @@
+name = CRL2 Panel MatchHeight
+description = Provides the match height functionality for panes, extending the panel styles plugins.
+core = 7.x
+package = CR Layout V2
+php = 5.2.4
+version = 7.x-0.02
+project = crl2_panel_matchheight
+dependencies[] = crl2_breakpoints
+dependencies[] = crl2_panel_styles
+dependencies[] = crl2_matchheight
+features[features_api][] = api:1
+no autodetect = 1
+project path = sites/all/modules/features/cr_layout_v2

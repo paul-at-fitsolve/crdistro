@@ -1,0 +1,86 @@
+<?php
+  /**
+   * @file
+   * Show panel panes in a region as a slider.
+   */
+
+  /**
+   * Implements hook_ctools_plugin_directory().
+   */
+  function cr_panels_slider_ctools_plugin_directory($module, $plugin) {
+    if ($module == 'panels' && $plugin == 'styles') {
+      return 'plugins/' . $plugin;
+    }
+  }
+
+  /**
+   * Implements hook_panels_pre_render().
+   *
+   * Add another level of depth to our titles to allow nesting.
+   *
+   * @param $display
+   */
+  function cr_panels_slider_panels_pre_render(&$display) {
+    cr_panels_slider_pane_titles(NULL, NULL, 1);
+  }
+
+  /**
+   * Implements hook_panels_post_render().
+   *
+   * Remove a level of depth from our titles as we've finished with this panel.
+   *
+   * @param $display
+   */
+  function cr_panels_slider_panels_post_render(&$display) {
+    cr_panels_slider_pane_titles(NULL, NULL, -1);
+  }
+
+  /**
+   * Implements hook_panels_pane_content_alter().
+   *
+   * Store the pane title for use when building our tabs.
+   *
+   * @param $content
+   * @param $pane
+   */
+  function cr_panels_slider_panels_pane_content_alter(&$content, &$pane) {
+    $title = isset($content->title) ? $content->title: '';
+    if (!empty($pane->configuration['override_title'])) {
+      $title = $pane->configuration['override_title_text'];
+    }
+    cr_panels_slider_pane_titles($pane->pid, $title);
+  }
+
+
+  /**
+   * Get or set pane title.
+   *
+   * @param $pid
+   *   Panels pane ID.
+   * @param $title
+   *   Optional; Panles pane title to set, or if empty then the function will
+   *   return the captured title based on the display ID and pane ID properties.
+   * @param $modify_depth
+   *   Modify the depth we're dealing with to handle nesting of panels.
+   *
+   * @return
+   *   Unsanitized pane title, or NULL if doesn't exist.
+   *
+   * @see panels_tabs_panels_pre_render()
+   * @see panels_tabs_panels_post_render()
+   * @see panels_tabs_panels_pane_content_alter()
+   */
+  function cr_panels_slider_pane_titles($pid, $title = NULL, $modify_depth = NULL) {
+    $depth = &drupal_static(__FUNCTION__ . ':depth', 0);
+    $cache = &drupal_static(__FUNCTION__, array());
+
+    if (isset($modify_depth)) {
+      $depth += $modify_depth;
+    }
+
+    if (!isset($title)) {
+      return (isset($cache[$depth][$pid])) ? $cache[$depth][$pid] : NULL;
+    }
+
+  $cache[$depth][$pid] = $title;
+ }

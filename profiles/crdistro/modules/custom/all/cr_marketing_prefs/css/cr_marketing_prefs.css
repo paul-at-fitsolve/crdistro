@@ -1,0 +1,18 @@
+/*
+ * ESU Honeypot
+ * @author: Carl Hinton for Comic Relief.
+ * @date: 12th February 2015.
+ */
+.promoprefs {
+
+    position: absolute;
+    top: -3000px;
+    right: -3000px;
+    background-color:#FFF;
+    color: #FFF;
+
+}
+#promoprefs {
+    width: 1px;
+    height: 1px;
+}

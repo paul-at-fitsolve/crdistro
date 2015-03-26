@@ -1,0 +1,14 @@
+name = CR Donate Promo
+core = 7.x
+package = "Comic Relief"
+php = 5.2.4
+version = 7.x-0.1
+project = cr_donate_promo
+dependencies[] = features
+dependencies[] = image
+dependencies[] = text
+features[features_api][] = api:1
+features[field_base][] = field_logo
+features[field_instance][] = fieldable_panels_pane-donate_promo-field_body
+features[field_instance][] = fieldable_panels_pane-donate_promo-field_image
+features[field_instance][] = fieldable_panels_pane-donate_promo-field_logo

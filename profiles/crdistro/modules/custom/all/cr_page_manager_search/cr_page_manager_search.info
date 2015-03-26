@@ -1,0 +1,15 @@
+name = CR Page Manager Search
+description = Makes Page manager pages searchable by Search API module.
+package = Comic Relief
+core = 7.x
+version = "7.x-0.1"
+core = "7.x"
+project = "cr_page_manager_search"
+
+files[] = cr_page_manager_search.entity.inc
+files[] = includes/search.inc
+files[] = views/query.inc
+
+dependencies[] = page_manager
+dependencies[] = search_api_solr
+dependencies[] = search_api_multi

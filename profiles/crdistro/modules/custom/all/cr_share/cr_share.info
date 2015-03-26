@@ -1,0 +1,8 @@
+name = CR Share Links
+description = Provides the functionality for the Share Links above the footer
+package = "Comic Relief"
+core = 7.x
+
+
+dependencies[] = bean
+files[] = plugins/bean/cr.share.inc

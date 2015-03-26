@@ -1,0 +1,88 @@
+<?php
+
+/**
+ * @file SVG field formatter module.
+ *
+ * Provides a SVG file formatter.
+ *
+ * Uses the File Field API.
+ *
+ * Usage: Add a File field to an entity. In Manage Display settings, set
+ * the display formatter to SVG.
+ *
+ * Renders the uploaded SVG as the src attribute of an image tag
+ *
+ * I.E <img src="path_to_your_svg.svg" />
+ *
+ * See this module's README.txt and http://wiki.comicrelief.com/wiki/RND15_Technical_Documentation#SVG_Field
+ * for further imformation.
+ * 
+ */
+
+/**
+ * Implements hook_field_formatter_info().
+ *
+ * Basic but required information for the Field API.
+ */
+function crl2_svg_field_field_formatter_info() {
+  return array(
+    'svg_field_formatter' => array(
+      'label' => t('Display SVG'),
+      'field types' => array('file'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ *
+ * Pass the field content to theme_crl2_svg_field to render
+ * the SVG file.
+ */
+function crl2_svg_field_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, &$items, $display) {
+
+  $element = array();
+  foreach ($items as $delta => $item) {
+    $element[$delta]['#markup'] = theme('crl2_svg_field', $item);
+  }
+  return $element;
+}
+
+/**
+ * Implements hook_theme().
+ *
+ * Just register a theme function here so field output can
+ * be altered/extended later on, if need be.
+ */
+function crl2_svg_field_theme() {
+  return array(
+    'crl2_svg_field' => array(
+      'variables' => array('variables' => NULL),
+    )
+  );
+}
+
+/**
+ * Theme function for the SVG field formatter.
+ *
+ * @param $variables
+ * @return string containing the SVG file URI as the src attribute of an img tag
+ */
+function theme_crl2_svg_field($variables) {
+
+  // URI will be something like: public://filename.svg
+  $filepath = $variables['uri'];
+
+  // Need to make a true URI to this resource.
+  // Using file_create_url() ensures this will play
+  // nice with the CDN later on.
+  $file_uri = file_create_url($filepath);
+
+  // Just double-check we have an uploaded file
+  if (!is_file($filepath) && !is_uploaded_file($filepath)) {
+    return;
+  } else {
+    // Return a span tag which will have an img tag created within it referencing the SVG file in the data-src attribute
+    return '<span data-svg data-src="' . $file_uri . '"></span>';
+  }
+}

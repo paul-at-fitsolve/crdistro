@@ -1,0 +1,24 @@
+From 2f44228fc33fb96118a0f6e910b7728830de5b70 Mon Sep 17 00:00:00 2001
+From: Jeremy Pitt <jeremy@jnpwebdeveloper.com>
+Date: Thu, 29 Jan 2015 14:53:41 +0000
+Subject: [PATCH] RED-2464 Added before panel display save hook.
+
+---
+ public/sites/all/modules/contrib/panels/panels.module | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/public/sites/all/modules/contrib/panels/panels.module b/public/sites/all/modules/contrib/panels/panels.module
+index 905ff37..f153fdf 100644
+--- a/public/sites/all/modules/contrib/panels/panels.module
++++ b/public/sites/all/modules/contrib/panels/panels.module
+@@ -884,6 +884,7 @@ function panels_load_display($did) {
+  */
+ function panels_save_display(&$display) {
+   $update = (isset($display->did) && is_numeric($display->did)) ? array('did') : array();
++  module_invoke_all('panels_display_before_save', $display);
+   drupal_write_record('panels_display', $display, $update);
+ 
+   $pids = array();
+-- 
+2.2.1
+

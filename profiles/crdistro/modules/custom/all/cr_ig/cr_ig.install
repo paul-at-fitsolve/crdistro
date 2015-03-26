@@ -1,0 +1,64 @@
+<?php
+
+/**
+  * Provides the basic schema for the ideas generator
+  * The ideas generator needs to track:
+  * - Name(String) 35 Char
+  * - Age(Int)
+  * - Idea(String)
+  */
+function cr_ig_schema() {
+  $schema = array();
+
+  $schema['cr_ig_pledge'] = array (
+    'description' => 'Stores the idividual pledges',
+    'fields' => array (
+      'id' => array (
+        'description' => 'Primary Key for all pledges',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'name' => array (
+        'description' => 'The name of the participant',
+        'type' => 'varchar',
+        'not null' => TRUE,
+        'length' => 35,
+      ),
+      'age' => array (
+        'description' => 'Age of the participant',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'unsigned' => TRUE,
+      ),
+      'pledge' => array (
+        'description' => 'The pledge text',
+        'type' => 'varchar', 
+        'not null' => TRUE,
+        'length' => 200,
+      ),
+      'published' => array (
+        'description' => 'Only show the published pledges',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'size' => 'tiny',
+        'default' => 0,
+      ),
+    ),
+    'primary key' =>  array('id'),
+    'indexes' => array (
+        'name' => array('name'),
+        'age' => array('age'),
+    ),
+    'mysql_engine' => 'InnoDB',
+  );
+
+  return $schema;
+}
+
+function cr_ig_uninstall() {
+  field_attach_delete_bundle('cr_ig_pledge', 'cr_ig_pledge');
+}
+

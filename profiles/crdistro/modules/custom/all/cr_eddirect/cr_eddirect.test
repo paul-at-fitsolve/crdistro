@@ -1,0 +1,49 @@
+<?php
+
+/**
+ * @file
+ * Tests for Comic Relief edDirect module.
+ */
+
+class CrEdDirectTestCase extends DrupalWebTestCase {
+
+  public static function getInfo() {
+    return array(
+      'name' => 'edDirect',
+      'description' => 'Make sure that the edDirect API functions correctly.',
+      'group' => 'Comic Relief',
+    );
+  }
+
+  function setUp() {
+    parent::setUp('cr_eddirect');
+  }
+
+  function testEdDirect() {
+    $ed_direct = new EdDirect();
+
+    // Test basic name search functionality.
+    $result = $ed_direct->search('name', 'Nottingham Nurs');
+    $this->assertEqual($result[0]->Name, 'Nottingham Nursery', 'Name search finds the expected name.');
+    $this->assertEqual($result[0]->Address->Postcode, 'NG8 5AR', 'Name search finds the expected postcode.');
+
+    // Test basic postcode search functionality.
+    $result = $ed_direct->search('postcode', 'NG8 5A');
+    $this->assertEqual($result[0]->Name, 'Nottingham Nursery', 'Postcode search finds the expected name.');
+    $this->assertEqual($result[0]->Address->Postcode, 'NG8 5AR', 'Postcode search finds the expected postcode.');
+
+    // Test get address functionality.
+    $result = $ed_direct->loadRecord(254743);
+    $this->assertEqual($result->Name, 'Nottingham Nursery', 'Address ID lookup finds the expected name.');
+
+    // Deliberately set a bad key and check that we recover.
+    $key = $ed_direct->getAPIKey();
+    cache_set('cr_eddirect_api_key', 'INVALID-KEY', 'cache', REQUEST_TIME + 3600);
+
+    $result = $ed_direct->loadRecord(254743);
+    $this->assertEqual($result->Name, 'Nottingham Nursery', 'Address ID lookup finds the expected name with reauthentication.');
+
+    $key2 = $ed_direct->getAPIKey();
+    $this->assertNotEqual($key, $key2, 'A new authentication key was issued.');
+  }
+}

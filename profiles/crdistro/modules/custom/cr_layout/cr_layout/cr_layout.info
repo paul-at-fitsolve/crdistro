@@ -1,0 +1,5 @@
+name = CR Layout config
+description = Accompanying module for the core cr_layout theme which adds a few extra features (such as panels styles)
+core = 7.x
+package = "CR Layout V1"
+dependencies[] = panels

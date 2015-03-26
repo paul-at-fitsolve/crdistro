@@ -1,0 +1,135 @@
+<?php
+/**
+ * @file
+ *
+ * Allows an administrator to specify a minipanel to be associated with a
+ * Drupal menu item.
+ *
+ */
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Add the minipanel selector & associated settings to the menu item editor.
+ */
+function menu_minipanels_lite_form_menu_edit_item_alter(&$form, $form_state, $form_id) {
+  // Load minipanels.
+  ctools_include('plugins', 'panels');
+  $panel_minis = panels_mini_load_all();
+
+  // If no Mini Panels are found, leave a message.
+  if (empty($panel_minis)) {
+    drupal_set_message(t('No Mini Panels are available, some need to be added via the <a href="!link" title="Mini Panels administrator">Mini Panels admin</a> for the Menu_MiniPanels module to work.', array('!link' => url('admin/structure/mini-panels'))), 'warning');
+  }
+
+  // Mini Panels are available.
+  else {
+    // Load the admin code necessary for this.
+    module_load_include('inc', 'menu_minipanels', 'menu_minipanels.admin');
+
+    // Load the JS necessary for the admin.
+    drupal_add_js(drupal_get_path('module', 'menu_minipanels') . '/js/menu_minipanels_admin.js', array('scope' => 'footer'));
+
+    // The 'options' element already exists, just need to tweak it.
+    $form['options']['#tree'] = TRUE;
+    $form['options']['#type'] = 'markup';
+    $form['options']['#weight'] = '50';
+    unset($form['options']['#value']['attributes']);
+
+    // Create options for select box
+    $options = array('' => '- None -');
+    foreach ($panel_minis as $panel_mini) {
+      // If the admin title is empty, use the minipanel name.
+      if (!empty($panel_mini->admin_title)) {
+        $title = check_plain($panel_mini->admin_title);
+      }
+      else {
+        $title = check_plain($panel_mini->name);
+      }
+      $options[check_plain($panel_mini->name)] = check_plain($title);
+    }
+    asort($options);
+
+    $item = $form['original_item']['#value'];
+    $form['options']['minipanel'] = array(
+      '#type' => 'select',
+      '#title' => t('Menu minipanel'),
+      '#description' => t('Choose the minipanel to link.'),
+      '#default_value' => isset($item['options']['minipanel']) ? $item['options']['minipanel'] : '',
+      '#options' => $options,
+      '#required' => FALSE,
+    );
+
+    // Ensure the settings structure exists.
+    if (!isset($form['original_item']['#value']['options']['menu_minipanels_hover'])) {
+      $form['original_item']['#value']['options']['menu_minipanels_hover'] = array();
+    }
+
+    // This is prepended to the array to ensure it is executed before
+    // menu_edit_item_submit.  If it is executed after menu_edit_item_submit,
+    // then the menu_minipanels_hover array will be saved to the database
+    // anyway, and the intercept would be pointless.
+    array_unshift($form['#submit'], 'menu_minipanels_lite_menu_edit_item_submit');
+  }
+}
+
+/**
+ * If no minipanel is set, stop minipanel settings being saved.
+ */
+function menu_minipanels_lite_menu_edit_item_submit($form, &$form_state) {
+  if (empty($form_state['values']['options']['minipanel'])) {
+    unset($form_state['values']['options']['menu_minipanels_hover']);
+  }
+}
+
+/**
+ * Implements hook_theme_registry_alter().
+ *
+ * Theme preprocess functions aren't called if the theme is in a function.
+ *
+ * This hacks a preprocess function for theme_menu_link in a way that
+ * won't interfere with other themes or modules that override
+ * theme_menu_link.
+ *
+ * theme_menu_link is overriddeden because to print menus, themes and
+ * modules generally use menu_tree_output, and menu_tree_output calls
+ * theme_menu_link.
+ *
+ * This method *only* works if theme_menu_link is called *before*
+ * $closure is created in page_preprocess.
+ *
+ * If a theme calls theme('menu_tree') in a page.tpl.php for instance, this
+ * will not work.
+ *
+ * To get it to work, the theme will need to implement page_preprocess hook
+ * and add a variable to $vars, so that the theme_menu_link is called
+ * *before* $closure.
+ */
+function menu_minipanels_lite_theme_registry_alter(&$vars) {
+  $vars['link']['old function'] = $vars['link']['function'];
+  $vars['link']['function'] = 'menu_minipanels_lite__preprocess_link';
+}
+
+
+/**
+ * Menu callback for theme_link.
+ * See @menu_minipanels_theme_registry_alter.
+ */
+function menu_minipanels_lite__preprocess_link($link) {
+  $matches = array();
+  if (!empty($link['options']['minipanel'])) {
+    $prefix = 'mini-';
+    $link['options']['attributes']['data-minipanel-target'][] = $prefix . str_replace('_', "-", $link['options']['minipanel']);
+  }
+  $registry = theme_get_registry();
+  if (isset($registry['link']['old function'])) {
+    return $registry['link']['old function']($link);
+  }
+  elseif (isset($registry['link']['original']['old function'])) {
+    return $registry['link']['original']['old function']($link);
+  }
+  else {
+    return $link;
+  }
+}
+

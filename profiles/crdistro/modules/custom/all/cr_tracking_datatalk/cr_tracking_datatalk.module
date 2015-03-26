@@ -1,0 +1,45 @@
+<?php
+/**
+ * @file
+ * .module file for cr_tracking_datatalk module
+ *
+ * Author: Jeremy Pitt
+ */
+
+/**
+ * Default values
+ */
+define('CR_DATATALK_SOURCE', 'https://hotspot.datatalk.co.uk/GKERT/HSD.jpg');
+
+/**
+ * Implements hook_menu().
+ */
+function cr_tracking_datatalk_menu() {
+  $items['admin/config/system/datatalk'] = array(
+    'title' => 'DataTalk Tracking',
+    'description' => 'Configure the DataTalk tracking settings.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cr_tracking_datatalk_admin'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'cr_tracking_datatalk.admin.inc',
+  );
+  return $items;
+}
+
+/*
+ * Implements hook_preprocess_html
+ *
+ * This hook simply inserts a tracking pixel at the bottom of the page before the closing body tag
+ */
+function cr_tracking_datatalk_preprocess_html(&$vars) {
+  global $theme;
+  $default_theme = variable_get('theme_default','none');
+  if($theme == $default_theme && !empty($vars['page']['page_bottom'])) {
+    $tracking_image_source = variable_get('cr_tracking_datatalk_tracking_source', CR_DATATALK_SOURCE);
+    $tracking_image = array(
+      '#weight' => 100,
+      '#markup' => '<img alt="" width="0" height="0" src="' . $tracking_image_source . '" />'
+    );
+    $vars['page']['page_bottom']['datatalk'] = $tracking_image;
+  }
+}

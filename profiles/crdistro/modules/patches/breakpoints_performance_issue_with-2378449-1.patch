@@ -1,0 +1,45 @@
+:qFrom cb71684561c8ae7e3f690cae2c75114e7283277d Mon Sep 17 00:00:00 2001
+From: William Hearn <sylus1984@gmail.com>
+Date: Tue, 25 Nov 2014 00:28:41 -0500
+Subject: [PATCH] Cache fix.
+
+---
+ breakpoints.module | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/breakpoints.module b/breakpoints.module
+index 68e9ee0..fb70f80 100644
+--- a/breakpoints.module
++++ b/breakpoints.module
+@@ -58,7 +58,7 @@ function breakpoints_enable() {
+  * Import breakpoints from all new enabled themes.
+  * Do not use breakpoints_breakpoints_group_reload_from_theme as is clears the cache.
+  */
+-function breakpoints_themes_enabled($theme_list) {
++function breakpoints_themes_enabled($theme_list, $force = TRUE) {
+   $themes = list_themes();
+   foreach ($theme_list as $theme_key) {
+     if (isset($themes[$theme_key]->info['breakpoints'])) {
+@@ -99,7 +99,9 @@ function breakpoints_themes_enabled($theme_list) {
+       drupal_set_message($message, 'status');
+     }
+   }
+-  menu_rebuild();
++  if ($force) {
++    menu_rebuild();
++  }
+ }
+ 
+ /**
+@@ -893,7 +895,7 @@ function breakpoints_flush_caches() {
+         breakpoints_breakpoints_group_reload($group, FALSE);
+       }
+       else {
+-        breakpoints_themes_enabled(array($theme_key));
++        breakpoints_themes_enabled(array($theme_key), FALSE);
+       }
+     }
+   }
+-- 
+1.9.3 (Apple Git-50)
+

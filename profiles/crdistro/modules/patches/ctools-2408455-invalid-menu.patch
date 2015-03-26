@@ -1,0 +1,77 @@
+diff --git a/public/sites/all/modules/contrib/ctools/page_manager/plugins/tasks/page.admin.inc b/public/sites/all/modules/contrib/ctools/page_manager/plugins/tasks/page.admin.inc
+index eb2dcaa..d2555db 100644
+--- a/public/sites/all/modules/contrib/ctools/page_manager/plugins/tasks/page.admin.inc
++++ b/public/sites/all/modules/contrib/ctools/page_manager/plugins/tasks/page.admin.inc
+@@ -553,6 +553,8 @@ function page_manager_page_form_basic_validate(&$form, &$form_state) {
+     }
+   }
+ 
++  page_manager_page_tabs_validate($path, $form, $form_state);
++
+   // Check to see if something that isn't a page manager page is using the path.
+   $path = implode('/', $path);
+   $result = db_query('SELECT * FROM {menu_router} WHERE path = :path', array(':path' => $path));
+@@ -787,11 +789,10 @@ function page_manager_page_form_menu($form, &$form_state) {
+ function page_manager_page_form_menu_validate(&$form, &$form_state) {
+   // If setting a 'normal' menu entry, make sure that any placeholders
+   // support the to_arg stuff.
+-
++  $page = $form_state['page']->subtask['subtask'];
++  $path = explode('/', $page->path);
+   if ($form_state['values']['menu']['type'] == 'normal') {
+-    $page = $form_state['page']->subtask['subtask'];
+-
+-    foreach (explode('/', $page->path) as $bit) {
++    foreach ($path as $bit) {
+       if (!isset($bit) || $bit === '') {
+         continue;
+       }
+@@ -814,6 +815,8 @@ function page_manager_page_form_menu_validate(&$form, &$form_state) {
+       }
+     }
+   }
++  page_manager_page_tabs_validate($path, $form, $form_state);
++
+ }
+ 
+ /**
+@@ -1519,3 +1522,39 @@ function page_manager_page_form_delete_submit(&$form, &$form_state) {
+     drupal_set_message(t('The page has been reverted.'));
+   }
+ }
++
++/**
++ * In the event of setting 'tab' or 'default tab' against an invalid URL (one where the path has only one component),
++ * then when panels saves the parent component into the menu_rooter table, it is saved with the path field set to "".
++ *
++ * If Fast404 is installed, it intercepts the page load to check if the menu_router has a match for the current path
++ * or any of its parents.  It then matches the "" entry as a parent of every path, but tests this empty string value
++ * as a boolean which implicitly gets converted to FALSE, which eventually leads to fast4o4 deciding no page exists.
++ *
++ * @param String $path
++ *   - $path of the page.
++ * @param Array $form
++ *   - The form being validated.
++ * @param Array $form_state
++ *   - The values submitted.
++ *
++ */
++function page_manager_page_tabs_validate(&$path, &$form, &$form_state) {
++  // Load the page from the page name.
++  $name = $form_state['page']->subtask['subtask']->name;
++  $page_data = page_manager_page_load($name);
++
++  // Get the menu type, and field being validated.
++  $type = isset($form_state['values']['menu']['type']) ? $form_state['values']['menu']['type'] : $page_data->menu['type'];
++  $field = isset($form['path']) ? 'path' : 'menu';
++
++  // If menu type and path are incompatible then error.
++  if (in_array($type, array('tab', 'default tab'))  && count($path) < 2) {
++    form_error(
++      $form[$field],
++      t('The path @path is invalid for current menu setting: @menu.  It must have at least 2 path elements',
++      array(
++        '@menu' => $type,
++        '@path' => $path[0])));
++  }
++}

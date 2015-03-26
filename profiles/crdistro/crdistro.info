@@ -1,0 +1,4 @@
+name = Crdistro
+description = CR Distro
+version = VERSION
+core = 7.x

@@ -1,0 +1,7 @@
+name = Comic Relief Message Queues
+description = Provides the configuration to use the message broker backend
+core = 7.x
+version = 7.x-0.1
+project = cr_message_queues
+dependencies[] = message_broker_amqp
+package = "Comic Relief"

@@ -1,0 +1,4 @@
+name = Plus address lookup
+description = Provides a form element for address lookups via the Plus service.
+core = 7.x
+package = "Comic Relief"

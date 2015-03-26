@@ -1,0 +1,384 @@
+<?php
+
+/**
+  * Comic Relief Idea Generator
+  *
+  * Provides a simple form and storage to allow kids to
+  * pledge ideas
+  *
+  * @author Martin Eskdale Moen (m.eskdalemoen@comicrelief.com)
+  */
+
+function cr_ig_views_api() {
+  return array ('api' => 3.0);
+}
+
+/**
+  * Implements hook_entity_info()
+  *
+  * Very basic entity which has only a few fields
+  *
+  * @return array
+  */
+function cr_ig_entity_info() {
+  $info['cr_ig_pledge'] = array (
+    'label' => t('Idea Generator Pledge'),
+    'entity class' => 'Entity',
+    'controller class' => 'EntityAPIController',
+    'base table' => 'cr_ig_pledge',
+    'fieldable' => TRUE,
+    'entity keys' => array (
+      'id' => 'id'
+    ),
+    'label callback' => 'entity_class_label',
+    'uri callback' => 'entity_class_uri',
+    'module' => 'cr_ig',
+  );
+
+  return $info;
+}
+
+function cr_ig_menu() {
+  $items['fun-and-games/fundraising-ideas-machine/add'] = array(
+    'title' => 'Endpoint for adding a new pledge',
+    'page callback' => 'cr_ig_add_pledge',
+    'access arguments' => array('add new pledges'),
+    'type' => MENU_CALLBACK,
+  );
+  $items['fun-and-games/fundraising-ideas-machine/predef_pledges'] = array (
+    'title' => 'Get predfined pledges',
+    'file' => 'cr_ig_predef_pledges.inc',
+    'page callback' => 'cr_ig_predef_pledges_json',
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+  );
+  $items['admin/content/idea-generator/pledges'] = array (
+    'title' => 'Idea Generator pledges',
+    'access arguments' => array('administer pledges'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cr_ig_pledge_admin'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['admin/config/services/pledges'] = array (
+    'title' => 'Pledges API Config',
+    'access arguments' => array('administrate api'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cr_ig_admin_settings'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  return $items;
+}
+
+function cr_ig_permission() {
+  $permissions = array (
+    'administer pledges' => array (
+      'title' => t('Administrate pledges'),
+    ),
+    'add new pledges' => array (
+      'title' => t('Submit new pledges'),
+    ),
+  );
+  return $permissions;
+}
+
+function cr_ig_pledge_admin ($form, &$form_state) {
+  //Get the latest data from DB using a view
+
+  //First get the view so we can change it
+  $view = views_get_view('idea_generator_admin');
+
+  //Set page number
+  $view->items_per_page = 20;
+
+  //Set which page we are on
+  $view->current_page = (array_key_exists('page', $_GET) ? $_GET['page'] : 0);
+
+  $view->init_display();
+
+  $view->pre_execute();
+
+  $view->execute();
+
+  $form = array();
+
+
+  $form['pledge'] = array (
+    '#tree' => TRUE,
+    '#theme' => 'table',
+    '#header' => array(t('Id'), t('Age'), t('Name'), t('Pledge'), t('Publish')),
+    '#rows' => array(),
+  );
+
+  foreach ($view->result as $pledge) {
+    $id = array (
+      '#id' => "pledge-id-$pledge->id",
+      '#markup' => $pledge->id,
+      '#type' => 'item',
+    );
+
+    $age = array (
+      '#id' => "pledge-age-$pledge->id",
+      '#type' => 'textfield',
+      '#default_value' => $pledge->cr_ig_pledge_age,
+      '#maxlength' => 2,
+      '#required' => TRUE,
+    );
+
+    $name = array (
+      '#id' => "pledge-name-$pledge->id",
+      '#type' => 'textfield',
+      '#default_value' => $pledge->cr_ig_pledge_name,
+      '#maxlength' => 32,
+      '#required' => TRUE,
+    );
+
+    $published = array (
+      '#id' => "pledge-published-$pledge->id",
+      '#type' => 'checkbox',
+      '#default_value' => $pledge->cr_ig_pledge_published,
+    );
+
+    if ($pledge->cr_ig_pledge_published != 1) {
+      $published['#states'] = array(
+        'checked' => array(
+          ':input[name="publish-all"]' => array('checked' => TRUE),
+        )
+      );
+    }
+
+    $form['pledge'][$pledge->id] = array (
+      'id' => &$id,
+      'age' => &$age,
+      'name' => &$name,
+      'pledge' => &$pledge_text,
+      'published' => &$published,
+    );
+
+    /**
+     * If the pledge text is numeric then we will convert it for viewing
+     * but disable the ability to edit it
+     */
+    if (is_numeric($pledge->cr_ig_pledge_pledge)) {
+      $pledge_header = _cr_ig_int_to_pledge($pledge->cr_ig_pledge_pledge);
+      $pledge_text += array (
+        '#default_value' => $pledge_header['header'],
+        '#disabled' => TRUE,
+      );
+      $predef = array (
+        '#type' => 'value',
+        '#value' => $pledge->cr_ig_pledge_pledge,
+      );
+      $form['pledge'][$pledge->id]['predef'] = &$predef;
+    }
+    else {
+      $pledge_text = array(
+        '#default_value' => $pledge->cr_ig_pledge_pledge,
+        '#type' => 'textfield',
+      );
+    }
+
+    $form['pledge']['#rows'][$pledge->id] = array (
+      array('data' => &$id),
+      array('data' => &$age),
+      array('data' => &$name),
+      array('data' => &$pledge_text),
+      array('data' => &$published),
+    );
+
+    unset($id);
+    unset($age);
+    unset($name);
+    unset($pledge_text);
+    unset($published);
+    unset($predef);
+  }
+
+  pager_default_initialize($view->total_rows, $view->items_per_page);
+
+  $form['pager'] = array (
+    '#markup' => theme('pager'),
+  );
+
+  $form['update'] = array (
+    '#type' => 'submit',
+    '#value' => t('Update'),
+  );
+
+  $form['publish-all'] = array (
+    '#type' => 'checkbox',
+    '#title' => t('Select All'),
+  );
+
+  return $form;
+}
+
+function cr_ig_pledge_admin_validate($form, &$form_state) {
+  foreach ($form_state['values']['pledge'] as $id => $pledge) {
+    if (_cr_ig_validate_age($pledge['age']) === FALSE) {
+      form_set_error("pledge[$id][age]", 'Please enter a valid age');
+    }
+    if (_cr_ig_validate_name($pledge['name']) === FALSE) {
+      form_set_error("pledge[$id][name]", 'Just your first name!');
+    }
+    if (array_key_exists('predef', $pledge) === FALSE &&_cr_ig_validate_pledge($pledge['pledge']) === FALSE) {
+      form_set_error("pledge[$id][pledge]", 'Please enter a valid pledge');
+    }
+  }
+}
+
+function cr_ig_pledge_admin_submit($form, &$form_state) {
+  $ids = array();
+  foreach ($form_state['values']['pledge'] as $id => $pledge) {
+    $ids[] = $id;
+  }
+
+  $pledges = entity_load_multiple_by_name('cr_ig_pledge', $ids);
+  foreach ($pledges as $pledge) {
+    //Lets find out if any values changed and then which ones did
+    //Array intersect will only allow thoose keys that match in both arrays
+    //Array diff will compare what was extracted from the database and what was submited
+    //If there is a difference it will provide that key and then we can save it using the orginal entity
+    $diff = array_diff($form_state['values']['pledge'][$pledge->id], array_intersect_key((array)$pledge, array('name' => '', 'age' => '', 'pledge' => '', 'published' => '')));
+    //If it's already a number in the DB isn't never changing
+    if (is_numeric($pledge->pledge)) {
+      unset($diff['pledge']);
+    }
+    if (count($diff) > 0) {
+      foreach ($diff as $key => $val) {
+        $new_pledge = $pledge;
+        $new_pledge->$key = $val;
+      }
+
+      if (entity_save('cr_ig', $new_pledge) == SAVED_UPDATED) {
+        if (array_key_exists('published', $diff)) {
+          switch ($new_pledge->published) {
+            case 1:
+              drupal_set_message("Pledge #$pledge->id has been published");
+              break;
+            case 0:
+              drupal_set_message("Pledge #$pledge->id has been unpublished");
+              break;
+          }
+          //This is here so we can easily determine if the user also changed any other values
+          unset($diff['published']);
+        }
+        if (count($diff) > 0) {
+          drupal_set_message("Pledge #$pledge->id has been updated", 'status');
+        }
+      }
+    }
+  }
+}
+
+function cr_ig_add_pledge () {
+  if (_cr_ig_validate_age($_POST['age'])) {
+    if (_cr_ig_validate_name($_POST['name'])) {
+      if (_cr_ig_validate_pledge($_POST['pledge'])) {
+        //If the pledge var is a number it came from the predefined pledges
+        if (is_numeric($_POST['pledge'])) {
+          $pledge = $_POST['pledge'];
+        }
+        else {
+          $pledge = cr_fg_services_sanitize($_POST['pledge']);
+        }
+        $e = entity_create('cr_ig_pledge', array (
+          'name' => cr_fg_services_sanitize($_POST['name']),
+          'age' => $_POST['age'],
+          'pledge' => $pledge,
+          'published' => 0 
+        ));
+        if (!variable_get('cr_ig_disable', FALSE)) {
+           entity_save('cr_ig_pledge', $e);
+        }   
+      }
+      else {
+        print drupal_json_encode(array('error' => 'pledge'));
+        drupal_exit();
+      }
+    }
+    else {
+      print drupal_json_encode(array('error' => 'name'));
+      drupal_exit();
+    }
+  }
+  else {
+    print drupal_json_encode(array('error' => 'age'));
+    drupal_exit();
+  }
+}
+
+function cr_ig_predef_pledges_json($reset = FALSE) {
+  // Respect Drupal public-cache settings.
+  // Borrowed from drupal_serve_page_from_cache(), bootstrap.inc.
+  $hook_boot_headers = drupal_get_http_header();
+  $max_age = !isset($_COOKIE[session_name()]) || isset($hook_boot_headers['vary']) ? variable_get('page_cache_maximum_age', 0) : 0;
+  drupal_add_http_header('Cache-Control', 'public, max-age=' . $max_age);
+  drupal_add_http_header("Expires", date("D, d M Y H:i:s", $max_age));
+  drupal_json_output(_cr_ig_get_predef_pledges());
+}
+
+
+/**
+  *
+  */
+function _cr_ig_int_to_pledge($int, $reset = FALSE) {
+  $cache = cache_get('cr_ig_predef_pledges');
+  if ($cache && !$reset) {
+    $pledges = $cache->data;
+  }
+  else {
+    module_load_include('inc', 'cr_ig', 'cr_ig_predef_pledges');
+    $pledges = _cr_ig_get_predef_pledges(TRUE);
+    cache_set('cr_ig_predef_pledges', $pledges);
+  }
+  if ($int <= count($pledges) && $int >= 0) {
+    return $pledges[$int];
+  }
+  else {
+    return -1;
+  }
+}
+
+function _cr_ig_validate_age($a) {
+  if (is_numeric($a) && strlen($a) <= 2 && strlen($a) > 0) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+function _cr_ig_validate_name($n) {
+  if (strlen($n) <= 10 && strlen($n) > 0) {
+    if (FALSE === strpos($n, ' ')) {
+      return TRUE;
+    } else {
+      return FALSE;    
+    }
+  }
+  return FALSE;
+}
+
+
+function _cr_ig_validate_pledge($p) {
+  /**
+   * Not checking if it's numeric here or if it's in the range of
+   * available pledges as this adds delay to the submission process
+   * Does not matter if it's outside of the range
+   */
+  if (strlen($p) <= 200 && strlen($p) > 0) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+
+function cr_ig_admin_settings() {
+  $form['cr_ig_disable'] = array(
+    '#title' => t('Disable the capture of pledges'),
+    '#description' => t('When checked will not record new pledges'),
+    '#type' => 'checkbox',
+    '#default_value' => variable_get('cr_ig_disable', FALSE),
+  );
+
+  $form = system_settings_form($form);
+  return $form;
+}

@@ -1,0 +1,110 @@
+<?php
+/**
+ * @file
+ * Code for the cr_layout_base feature.
+ */
+
+include_once 'cr_layout_base.features.inc';
+
+/**
+ * implementation of HOOK_entity_info_alter
+ */
+function cr_layout_base_entity_info_alter(&$entity_info) {
+  $entity_info['fieldable_panels_pane']['bundles']['text_media'] = array(
+    'label' => t('Text and Media'),
+    'pane top level' => TRUE, // set to true to make this show as a top level icon
+    'pane icon' => '/path/to/custom/icon/for/this/pane.png',
+    'admin' => array(
+      'path' => 'admin/structure/fieldable-panels-panes/manage/%fieldable_panels_panes_type',
+      'bundle argument' => 4,
+      // Note that this has all _ replaced with - from the bundle name.
+      'real path' => 'admin/structure/fieldable-panels-panes/manage/text_media',
+      'access arguments' => array('administer fieldable panels panes'),
+    ),
+  );
+  $entity_info['fieldable_panels_pane']['bundles']['text'] = array(
+    'label' => t('Text'),
+    'pane top level' => TRUE, // set to true to make this show as a top level icon
+    'pane icon' => '/path/to/custom/icon/for/this/pane.png',
+    'admin' => array(
+      'path' => 'admin/structure/fieldable-panels-panes/manage/%fieldable_panels_panes_type',
+      'bundle argument' => 4,
+      // Note that this has all _ replaced with - from the bundle name.
+      'real path' => 'admin/structure/fieldable-panels-panes/manage/text',
+      'access arguments' => array('administer fieldable panels panes'),
+    ),
+  );
+  $entity_info['fieldable_panels_pane']['bundles']['partner'] = array(
+    'label' => t('Partner'),
+    'pane top level' => TRUE, // set to true to make this show as a top level icon
+    'pane icon' => '/path/to/custom/icon/for/this/pane.png',
+    'admin' => array(
+      'path' => 'admin/structure/fieldable-panels-panes/manage/%fieldable_panels_panes_type',
+      'bundle argument' => 4,
+      // Note that this has all _ replaced with - from the bundle name.
+      'real path' => 'admin/structure/fieldable-panels-panes/manage/partner',
+      'access arguments' => array('administer fieldable panels panes'),
+    ),
+  );
+  $entity_info['fieldable_panels_pane']['bundles']['schools_download'] = array(
+    'label' => t('Schools Download'),
+    'pane top level' => TRUE, // set to true to make this show as a top level icon
+    'pane icon' => '/path/to/custom/icon/for/this/pane.png',
+    'admin' => array(
+      'path' => 'admin/structure/fieldable-panels-panes/manage/%fieldable_panels_panes_type',
+      'bundle argument' => 4,
+      // Note that this has all _ replaced with - from the bundle name.
+      'real path' => 'admin/structure/fieldable-panels-panes/manage/schools_download',
+      'access arguments' => array('administer fieldable panels panes'),
+    ),
+  );
+  $entity_info['fieldable_panels_pane']['bundles']['action_pod'] = array(
+    'label' => t('Action Pods'),
+    'pane top level' => TRUE, // set to true to make this show as a top level icon
+    'pane icon' => '/path/to/custom/icon/for/this/pane.png',
+    'admin' => array(
+      'path' => 'admin/structure/fieldable-panels-panes/manage/%fieldable_panels_panes_type',
+      'bundle argument' => 4,
+      // Note that this has all _ replaced with - from the bundle name.
+      'real path' => 'admin/structure/fieldable-panels-panes/manage/action_pod',
+      'access arguments' => array('administer fieldable panels panes'),
+    ),
+  );
+  $entity_info['fieldable_panels_pane']['bundles']['entity_collection'] = array(
+    'label' => t('Entity Collection'),
+    'pane top level' => TRUE, // set to true to make this show as a top level icon
+    'pane icon' => '/path/to/custom/icon/for/this/pane.png',
+    'admin' => array(
+      'path' => 'admin/structure/fieldable-panels-panes/manage/%fieldable_panels_panes_type',
+      'bundle argument' => 4,
+      // Note that this has all _ replaced with - from the bundle name.
+      'real path' => 'admin/structure/fieldable-panels-panes/manage/entity_collection',
+      'access arguments' => array('administer fieldable panels panes'),
+    ),
+  );
+}
+
+/**
+ * implementation of HOOK_menu
+ */
+function cr_layout_base_menu() {
+  $items['partner/%'] = array(
+    'title' => 'Page Example',
+    'page callback' => 'cr_layout_base_entity_view',
+    'page arguments' => array('fieldable_panels_pane',1),
+    'access arguments' => TRUE,
+  );
+  return $items;
+}
+
+/**
+ * Return a rendered entity
+ * @param $type
+ * @param $id
+ */
+function cr_layout_base_entity_view($type,$id) {
+  $ids = array($id);
+  // $entities = entity_load($type);
+  // return entity_view($type,$entities);
+}
+

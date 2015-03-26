@@ -1,0 +1,49 @@
+<?php
+/**
+ * @file
+ * A block module that performs quickfinding on the FAQ page
+ */
+
+function cr_scroll_to_top_help($path, $arg) {
+	switch ($path) {
+		case "admin/help#cr_scroll_to_top":
+			return '<p>' . t("info") . '</p>';
+			break;
+	}
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function cr_scroll_to_top_block_info(){
+	$blocks['cr_scroll_to_top'] = array (
+		'info' => t('cr_scroll_to_top Block'),
+		'cache' => DRUPAL_NO_CACHE, 
+	);
+	return $blocks;
+}
+
+
+
+function cr_scroll_to_top_block_view($delta = '') {
+	switch($delta){
+		case 'cr_scroll_to_top':
+			$block['subject'] = "<none>";
+      		$block['content']['#markup'] = theme('cr_scroll_to_top_block');
+      		drupal_add_js(drupal_get_path('module', 'cr_scroll_to_top') . '/cr_scroll_to_top.js', 'file');
+      	   /* drupal_add_css(drupal_get_path('module', 'cr_scroll_to_top') . '/cr_scroll_to_top.less', 'file');*/
+
+      		break;
+	}
+	return $block;
+}
+
+
+
+function cr_scroll_to_top_theme() {
+  return array(
+    'cr_scroll_to_top_block' => array(
+      'template' => 'cr_scroll_to_top-block',
+    ), 
+  );
+}

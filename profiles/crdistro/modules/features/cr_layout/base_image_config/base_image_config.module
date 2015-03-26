@@ -1,0 +1,246 @@
+<?php
+/**
+ * @file
+ * Code for the Base Image Config feature.
+ */
+
+include_once 'base_image_config.features.inc';
+
+/**
+ * Uncomment the column widths you want to generate view modes/breakpoint groups/picture groups/image styles for.
+ */
+function _base_image_config_columns() {
+  $columns = array();
+  // $columns['1']['wide'] = 30;
+  // $columns['1']['normal'] = 20;
+  // $columns['1']['narrow'] = 10;
+  $columns['2']['wide'] = 80;
+  $columns['2']['normal'] = 60;
+  $columns['2']['narrow'] = 40;
+  $columns['3']['wide'] = 130;
+  $columns['3']['normal'] = 100;
+  $columns['3']['narrow'] = 70;
+  $columns['4']['wide'] = 180;
+  $columns['4']['normal'] = 140;
+  $columns['4']['narrow'] = 100;
+  // $columns['5']['wide'] = 230;
+  // $columns['5']['normal'] = 170;
+  // $columns['5']['narrow'] = 120;
+  $columns['6']['wide'] = 280;
+  $columns['6']['normal'] = 220;
+  $columns['6']['narrow'] = 220;
+  // $columns['7']['wide'] = 330;
+  // $columns['7']['normal'] = 260;
+  // $columns['7']['narrow'] = 190;
+  $columns['8']['wide'] = 380;
+  $columns['8']['normal'] = 300;
+  $columns['8']['narrow'] = 220;
+  $columns['9']['wide'] = 430;
+  $columns['9']['normal'] = 340;
+  $columns['9']['narrow'] = 350;
+  $columns['10']['wide'] = 480;
+  $columns['10']['normal'] = 380;
+  $columns['10']['narrow'] = 280;
+  // $columns['11']['wide'] = 530;
+  // $columns['11']['normal'] = 420;
+  // $columns['11']['narrow'] = 310;
+  $columns['12']['wide'] = 580;
+  $columns['12']['normal'] = 460;
+  $columns['12']['narrow'] = 340;
+  $columns['13']['wide'] = 630;
+  $columns['13']['normal'] = 500;
+  $columns['13']['narrow'] = 370;
+  $columns['14']['wide'] = 680;
+  $columns['14']['normal'] = 540;
+  $columns['14']['narrow'] = 400;
+  $columns['15']['wide'] = 730;
+  $columns['15']['normal'] = 580;
+  $columns['15']['narrow'] = 430;
+  $columns['16']['wide'] = 780;
+  $columns['16']['normal'] = 620;
+  $columns['16']['narrow'] = 460;
+  // $columns['17']['wide'] = 830;
+  // $columns['17']['normal'] = 760;
+  // $columns['17']['narrow'] = 590;
+  $columns['18']['wide'] = 880;
+  $columns['18']['normal'] = 700;
+  $columns['18']['narrow'] = 520;
+  // $columns['19']['wide'] = 930;
+  // $columns['19']['normal'] = 740;
+  // $columns['19']['narrow'] = 550;
+  $columns['20']['wide'] = 980;
+  $columns['20']['normal'] = 780;
+  $columns['20']['narrow'] = 580;
+  // $columns['21']['wide'] = 1030;
+  // $columns['21']['normal'] = 820;
+  // $columns['21']['narrow'] = 610;
+  $columns['22']['wide'] = 1080;
+  $columns['22']['normal'] = 860;
+  $columns['22']['narrow'] = 640;
+  // $columns['23']['wide'] = 1130;
+  // $columns['23']['normal'] = 900;
+  // $columns['23']['narrow'] = 670;
+  $columns['24']['wide'] = 1180;
+  $columns['24']['normal'] = 940;
+  $columns['24']['narrow'] = 700;
+  $columns['mediabar_big']['wide'] = 250;
+  $columns['mediabar_big']['normal'] = 190;
+  $columns['mediabar_big']['narrow'] = 310;
+  return $columns;
+}
+
+/**
+ * Implementation of HOOK_entity_info_alter
+ */
+function base_image_config_entity_info_alter(&$entity_info) {
+  $entity_info['fieldable_panels_pane']['bundles']['image'] = array(
+    'label' => t('Image'),
+    'pane top level' => TRUE, // set to true to make this show as a top level icon
+    'pane icon' => '/path/to/custom/icon/for/this/pane.png',
+    'admin' => array(
+      'path' => 'admin/structure/fieldable-panels-panes/manage/%fieldable_panels_panes_type',
+      'bundle argument' => 4,
+      // Note that this has all _ replaced with - from the bundle name.
+      'real path' => 'admin/structure/fieldable-panels-panes/manage/image',
+      'access arguments' => array('administer fieldable panels panes'),
+    ),
+  );
+
+}
+
+/**
+ * Implements hook_ds_view_modes_info().
+ */
+function base_image_config_ds_view_modes_info() {
+  $export = array();
+
+  // Create a view mode for every column width
+  $columns = _base_image_config_columns();
+  foreach ($columns as $column => $breakpoints) {
+    $ds_view_mode = new stdClass();
+    $ds_view_mode->api_version = 1;
+    $ds_view_mode->view_mode = 'grid_' . $column;
+    $ds_view_mode->label = 'Grid ' . $column;
+    $ds_view_mode->entities = array(
+      'fieldable_panels_pane' => 'fieldable_panels_pane',
+    );
+    $export['grid_' . $column] = $ds_view_mode;
+  }
+
+  return $export;
+}
+
+/**
+ * Implements hook_image_default_styles().
+ */
+function base_image_config_image_default_styles() {
+  $styles = array();
+  $mobileBreakpoint = 740;
+  $desktopQuality = 70;
+  $mobileQuality = 30;
+  $columns = _base_image_config_columns();
+
+  // Loop through and create the x2 style data
+  foreach ($columns as $column => $breakpoints) {
+    foreach ($breakpoints as $breakpoint => $width) {
+      $columns[$column]['narrow-x2'] = $columns[$column]['narrow'] * 2;
+    }
+  }
+
+  // We only need one fluid style because each column is the same.
+  $columns['all-columns']['fluid'] = $mobileBreakpoint;
+  $columns['all-columns']['fluid-x2'] = $mobileBreakpoint * 2;
+
+  foreach ($columns as $column => $breakpoints) {
+    foreach ($breakpoints as $breakpoint => $width) {
+      $styles['grid-' . $column . '-' . $breakpoint ] = array(
+        'label' => $column . ' columns ' . $breakpoint,
+        'effects' => array(
+           array(
+            'name' => 'image_scale',
+            'data' => array(
+              'width' => $width,
+              'height' => '',
+              'upscale' => 1,
+            ),
+            'weight' => 0,
+          ),
+        ),
+      );
+
+      // Set the image quality of the default images
+      $styles['grid-' . $column . '-' . $breakpoint ]['effects'][] = array(
+        'name' => 'image_style_quality',
+        'data' => array(
+          'quality' => ($breakpoint === 'fluid' || $breakpoint === 'fluid-x2' ? $mobileQuality : $desktopQuality)
+        ),
+        'weight' => 1,
+      );
+
+    }
+  }
+  return $styles;
+}
+
+function base_image_config_default_picture_mapping() {
+  $export = array();
+
+  $columns = _base_image_config_columns();
+  foreach ($columns as $column => $breakpoint) {
+   $picture_mapping = new stdClass();
+    $picture_mapping->disabled = FALSE; /* Edit this to true to make a default picture_mapping disabled initially */
+    $picture_mapping->api_version = 1;
+    $picture_mapping->machine_name = 'grid_' . $column;
+    $picture_mapping->breakpoint_group = 'grid_' . $column;
+    $picture_mapping->mapping = array(
+      'breakpoints.theme.cr_layout.fluid' => array(
+        '1x' => 'grid-all-columns-fluid',
+        'x2' => 'grid-all-columns-fluid-x2',
+      ),
+      'breakpoints.theme.cr_layout.narrow' => array(
+        '1x' => 'grid-' . $column . '-' . 'narrow',
+        'x2' => 'grid-' . $column . '-' . 'narrow-x2',
+      ),
+      'breakpoints.theme.cr_layout.normal' => array(
+        '1x' => 'grid-' . $column . '-' . 'normal',
+      ),
+      'breakpoints.theme.cr_layout.wide' => array(
+        '1x' => 'grid-' . $column . '-' . 'wide',
+      ),
+    );
+    $export['grid_' . $column] = $picture_mapping;
+  }
+
+  return $export;
+}
+
+/**
+ * Implements hook_default_breakpoint_group().
+ */
+function base_image_config_default_breakpoint_group() {
+  $export = array();
+
+
+  // Breakpoints.
+  $breakpoints = array();
+  $breakpoints[] = 'breakpoints.theme.cr_layout.fluid';
+  $breakpoints[] = 'breakpoints.theme.cr_layout.narrow';
+  $breakpoints[] = 'breakpoints.theme.cr_layout.normal';
+  $breakpoints[] = 'breakpoints.theme.cr_layout.wide';
+
+  $columns = _base_image_config_columns();
+  foreach ($columns as $column => $breakpoint) {
+    // Breakpoint group.
+    $breakpoint_group = new stdClass();
+    $breakpoint_group->disabled = FALSE; /* Edit this to true to make a default breakpoint_group disabled initially */
+    $breakpoint_group->api_version = 1;
+    $breakpoint_group->machine_name = 'grid_' . $column;
+    $breakpoint_group->name = 'Grid ' . $column;
+    $breakpoint_group->breakpoints = $breakpoints;
+    $breakpoint_group->type = 'theme';
+    $breakpoint_group->overridden = 0;
+    $export['grid_' . $column] = $breakpoint_group;
+  }
+
+  return $export;
+}

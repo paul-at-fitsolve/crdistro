@@ -1,0 +1,7 @@
+name = Comic Relief edDirect web service
+description = Connects to the edDirect web service to search for educational establishments.
+core = 7.x
+package = "Comic Relief"
+dependencies[] = wsclient_soap
+files[] = cr_eddirect.test
+files[] = EdDirect.php

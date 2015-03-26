@@ -1,0 +1,539 @@
+<?php
+
+/**
+  * Comic Relief High Scores API
+  *
+  * The module provides a simple storage for posting to and retreving 
+  * data without the overhead of nodes
+  *
+  * The admin uses a view to generate the moderation interface
+  *
+  * @author Martin Eskdale Moen (m.eskdalemoen@comicrelief.com)
+  */
+
+function cr_hs_views_api() {
+  return array ('api' => 3.0);
+}
+
+/**
+  * Implements hook_entity_info()
+  *
+  *
+  * @return array
+  *
+  */
+function cr_hs_entity_info() {
+  $info['cr_hs_score'] = array (
+    'label' => t('High Scores Entry'),
+    'entity class' => 'Entity',
+    'controller class' => 'EntityAPIController',
+    'base table' => 'cr_hs_scores',
+    'fieldable' => TRUE,
+    'entity keys' => array (
+      'id' => 'id'
+    ),
+    'label callback' => 'entity_class_label',
+    'uri callback' => 'entity_class_uri',
+    'module' => 'cr_hs',
+  );
+
+  return $info;
+}
+
+/**
+  * Implements hook_menu
+  */
+function cr_hs_menu() {
+  $items['fun-and-games/leaderboard/add'] = array (
+    'title' => 'High Scores Json Submission',
+    'access arguments' => array('add new scores'),
+    'page callback' => 'cr_hs_add_score',
+    'type' => MENU_CALLBACK,
+  );
+  
+  //Quiet hacky method to config the endpoint of the flash game
+  $items['fun-and-games/config.xml'] = array(
+    'title' => t('Fun and games config'),
+    'access arguments' => array('add new scores'),
+    'page callback' => 'cr_hs_configxml',
+    'type' => MENU_CALLBACK,
+   );
+
+  //Quiet hacky method to config the endpoint of the flash game
+  $items['crossdomain.xml'] = array(
+    'title' => t('Fun and games crossdomain config'),
+    'access arguments' => array('add new scores'),
+    'page callback' => 'cr_hs_crossdomainxml',
+    'type' => MENU_CALLBACK,
+   );
+
+  $items['admin/config/services/high-scores'] = array (
+    'title' => 'High Scores API Config',
+    'access arguments' => array('administrate api'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cr_hs_admin_settings'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  $items['admin/content/high-scores/view/submissions'] = array (
+    'title' => 'High Score Moderation',
+    'access arguments' => array('administrate scores'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cr_hs_scores_admin'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+
+  return $items;
+}
+
+function cr_hs_permission() {
+  $permissions = array (
+    'administrate scores' => array (
+      'title' => t('Admin score submissions'),
+    ),
+    'administrate api' => array(
+      'title' => t('Admin API config of scores service'),
+    ),
+    'add new scores' => array(
+      'title' => t('Submit new scores'),
+    ),
+  );
+  return $permissions;
+}
+
+/**
+ * Main function that inserts new submissions
+ *
+ * It accepts a standard application/x-www-form-urlencoded posts and 
+ * expects the folowing:
+ *  'username' => String (max 35)
+ *  'score' => Int,
+ *  'timestamp' => 32bit unix timestamp
+ *  'gameid' => See $gname in admin section
+ *  'nonce' => Random 256 bit string
+ *  'hmac' => Calculated hmac based on API key, nonce and timestamp
+ */
+function cr_hs_add_score() {
+  $json = drupal_json_decode($_POST['submission']);
+  if ($json != FALSE) {
+    if (is_numeric($json['score'])) {
+      if (is_numeric($json['timestamp']) && (int) $json['timestamp'] > 0) {
+        if (is_string($json['gameid']) && strlen($json['gameid']) > 2) {
+          if (_cr_hs_validate_username($json['username'])) {
+            if (_cr_hs_validate_nonce($json['nonce'])) {
+              if (_cr_hs_validate_hmac($json)) {
+                $e = entity_create('cr_hs_score', array (
+                  'username' => cr_fg_services_sanitize($json['username']),
+                  'score' => $json['score'],
+                  'timestamp' => $json['timestamp'],
+                  'nonce' => $json['nonce'],
+                  'gameid' => $json['gameid'],
+                  'published' => 0,
+                ));
+                if (!variable_get('cr_hs_disable', FALSE)) {
+                  if (entity_save('cr_hs_score', $e) == SAVED_NEW) {
+                    print drupal_json_output(array('saved' => TRUE));
+                    drupal_exit();
+                  }
+                }  
+                else {
+                  print drupal_json_output(array('error' => 'submission'));
+                  drupal_exit();
+                }
+              }
+              else {
+                print drupal_json_output(array('error' => 'hmac'));
+                drupal_exit();
+              }
+            }
+            else {
+              print drupal_json_output(array('error' => 'nonce'));
+              drupal_exit();
+            }
+          }
+          else {
+            print drupal_json_output(array('error' => 'username'));
+            drupal_exit();
+          }
+        }
+        else {
+          print drupal_json_output(array('error' => 'gameid'));
+          drupal_exit();
+        }
+      }
+      else {
+        print drupal_json_output(array('error' => 'timestamp'));
+        drupal_exit();
+      }
+    }
+    else {
+      print drupal_json_output(array('error' => 'score'));
+      drupal_exit();
+    }
+  }
+  else {
+    print drupal_json_output(array('error' => 'json_object'));
+    drupal_exit();
+  }
+}
+
+function cr_hs_admin_settings() {
+  $default_cd = '<cross-domain-policy>
+    <site-control permitted-cross-domain-policies="all"/>
+    <allow-access-from domain="*" to-ports="*"/>
+    <allow-http-request-headers-from domain="*" headers="*"/>
+    </cross-domain-policy>';
+  $form = array();
+  $form['cr_hs_disable'] = array(
+    '#title' => t('Disable the capture of high scores'),
+    '#description' => t('When checked will not record new high scores'),
+    '#type' => 'checkbox',
+    '#default_value' => variable_get('cr_hs_disable', FALSE),
+  );
+  $form['cr_hs_api_token'] = array(
+    '#title' => t('API Token'),
+    '#description' => t('This is a unique token that has to be provided to the end client before they can post any data to this service. If a new key is generated then the end client will not be able to post any data until the new key is provided.'),
+    '#type' => 'textfield',
+    '#default_value' => variable_get('cr_hs_api_token', ''),
+  );
+  $form['cr_hs_endpoint'] = array(
+    '#title' => t('Posting endpoint'),
+    '#description' => t('This is the endpoint that the game will be configured to post to'),
+    '#type' => 'textfield',
+    '#default_value' => variable_get('cr_hs_endpoint', 'https://www.rednoseday.com/fun-and-games/leaderborad/add'),
+  );
+  $form['cr_hs_crossdomain'] = array(
+    '#title' => t('crossdomain.xml'),
+    '#description' => t('This is the crossdomain xml file that is served to the flash game when attempting to post'),
+    '#type' => 'textarea',
+    '#default_value' => variable_get('cr_hs_crossdomain', $default_cd),
+  );
+  $form['gen_key'] = array(
+    '#type' => 'submit',
+    '#value' => 'Generate Key'
+  );
+
+  //Want to gen the sys form, but modify the submit button
+  $form = system_settings_form($form);
+
+  //Simply add our own submit hook first and let the others run after
+  array_unshift($form['#submit'], 'cr_hs_admin_settings_submit');
+
+  return $form;
+}
+
+function cr_hs_admin_settings_validate($form, &$form_state) {
+  if ($form_state['values']['op'] == 'Save configuration' && strlen($form_state['values']['cr_hs_api_token']) != 64) {
+    form_set_error('cr_hs_api_token', t('Token is not of valid length, 64 chars required'));
+  }
+}
+
+function cr_hs_admin_settings_submit($form, &$form_state) {
+  if ($form_state['values']['op'] == 'Generate Key') {
+    module_load_include('inc', 'cr_hs', 'cr_hs.func');
+    $form_state['values']['cr_hs_api_token'] = _cr_hs_generate_token();
+    drupal_set_message('Generated new token');
+  }
+}
+
+function cr_hs_scores_admin ($form, &$form_state) {
+  //Get the latest data from DB using a view
+  
+  //First get the view so we can change it
+  $view = views_get_view('high_scores_admin');
+  
+  //Set page number
+  $view->items_per_page = 100;
+  
+  //Set which page we are on
+  $view->current_page = (array_key_exists('page', $_GET) ? $_GET['page'] : 0);
+  
+  $view->init_display();
+  
+  $view->pre_execute();
+  
+  $view->execute();
+
+  $form = array();
+
+  $gname = array(
+    'drop' => t('Dino Drop'),
+    'hatch' => t('Dino Hatch'),
+    'jump' => t('Dino Jump'),
+    'race' => t('Dino Race'),
+   );
+
+  $form['score'] = array (
+    '#tree' => TRUE,
+    '#theme' => 'table',
+    '#header' => array(t('Id'), t('Username'), t('Score'), t('Game'), t('Published'), t('Select')),
+    '#rows' => array(),
+  );
+
+  foreach ($view->result as $score) {
+    $id = array (
+      '#id' => "score-id-$score->id",
+      '#markup' => $score->id,
+      '#type' => 'item',
+    );
+
+    $username = array (
+      '#id' => "score-username-$score->id",
+      '#type' => 'textfield',
+      '#default_value' => $score->cr_hs_scores_username,
+      '#maxlength' => 32,
+      '#required' => TRUE,
+    );
+
+    $game = array (
+      '#id' => "score-game-$score->id",
+      '#type' => 'item',
+      '#markup' => $gname[$score->cr_hs_scores_gameid],
+    );
+
+    $published = array (
+      '#id' => "score-published-$score->id",
+      '#type' => 'item',
+      '#markup' => ($score->cr_hs_scores_published ? t('Yes') : t('No')),
+    );
+
+    $score_text = array (
+      '#id' => "score-score-$score->id",
+      '#type' => 'item',
+      '#markup' => $score->cr_hs_scores_score,
+    );
+    
+    $selected = array (
+      '#id' => "score-selected-$score->id",
+      '#type' => 'checkbox', 
+      '#states' => array (
+        'checked' => array (
+          ':input[name="select-all"]' => array('checked' => TRUE)
+        ),
+      ),
+    );
+    
+    
+    $form['score'][$score->id] = array (
+      'id' => &$id,
+      'username' => &$username,
+      'score' => &$score_text,
+      'game' => &$game,
+      'published' => &$published,
+      'selected' => &$selected,
+    );
+
+
+    $form['score']['#rows'][$score->id] = array (
+      array('data' => &$id),
+      array('data' => &$username),
+      array('data' => &$score_text),
+      array('data' => &$game),
+      array('data' => &$published),
+      array('data' => &$selected),
+    );
+
+    unset($id);
+    unset($username);
+    unset($score_text);
+    unset($game);
+    unset($published);
+    unset($selected);
+  }
+  
+
+  $form['#attached']['css'] = array (
+    drupal_get_path('module', 'cr_hs') . '/cr_hs_scores_admin.css',
+  );
+  
+  pager_default_initialize($view->total_rows, $view->items_per_page);
+
+  $form['pager'] = array (
+    '#markup' => theme('pager'),
+  );
+
+  $form['unpublish'] = array (
+    '#type' => 'submit',
+    '#value' => t('Unpublish'),
+  );
+
+  $form['publish'] = array (
+    '#type' => 'submit',
+    '#value' => t('Publish'),
+  );
+
+  $form['update'] = array (
+    '#type' => 'submit',
+    '#value' => t('Update'),
+  );
+
+  $form['delete'] = array (
+    '#type' => 'submit',
+    '#value' => t('Delete'),
+  );
+
+  $form['select-all'] = array (
+    '#type' => 'checkbox',
+    '#title' => t('Select All'),
+  );
+  return $form;
+}
+
+function cr_hs_scores_admin_validate($form, &$form_state) {
+  foreach ($form_state['values']['score'] as $id => $score) {
+    if (_cr_hs_validate_username($score['username']) === FALSE) {
+      form_set_error("score[$id][username]", 'Please enter a valid name');
+    }
+  }
+}
+
+function cr_hs_scores_admin_submit($form, &$form_state) {
+  foreach ($form_state['values']['score'] as $id => $score) {
+    if ($score['selected'] == 1) {
+      
+      $new_score = new StdClass();
+      //Add the id
+      $new_score->id = $id;
+      //Perform the operation
+      switch ($form_state['values']['op']) {
+        case "Unpublish": 
+          $new_score->published = 0;
+          if (entity_save('cr_hs_score', $new_score) == SAVED_UPDATED) {
+            drupal_set_message(sprintf("Score #%u has been unpublished", $new_score->id), 'status');
+          }
+        break;
+        case "Publish": 
+          $new_score->published = 1;
+          if (entity_save('cr_hs_score', $new_score) == SAVED_UPDATED) {
+            drupal_set_message(sprintf("Score #%u has been published", $new_score->id), 'status');
+          }
+        break;
+        case "Update":
+          $new_score->username = $score['username'];
+          if (entity_save('cr_hs_score', $new_score) == SAVED_UPDATED) {
+            drupal_set_message(sprintf("Score #%u has been updated", $new_score->id), 'status');
+          }
+        break;
+        case "Delete":
+          try {
+            entity_delete('cr_hs_score', $id);
+            drupal_set_message(sprintf("Score #%u has been deleted", $new_score->id), 'status');
+          }
+          catch (Exception $e) {
+          }
+        break;
+      }
+    }
+  }
+}
+
+/**
+ * Outputs the config.xml files
+ *
+ * It is used by the games to know which endpoint to post to
+ * Useful if switching between https and http or between environments
+ *
+ */
+function cr_hs_configxml() {
+  // Respect Drupal public-cache settings.
+  // Borrowed from drupal_serve_page_from_cache(), bootstrap.inc.
+  $hook_boot_headers = drupal_get_http_header();
+  $max_age = !isset($_COOKIE[session_name()]) || isset($hook_boot_headers['vary']) ? variable_get('page_cache_maximum_age', 0) : 0;
+  drupal_add_http_header('Cache-Control', 'public, max-age=' . $max_age);
+  drupal_add_http_header("Expires", date("D, d M Y H:i:s", $max_age));
+  drupal_add_http_header('Content-Type', 'text/xml; utf-8;');;
+  print '<?xml version="1.0" encoding="utf-8" ?>';
+  print sprintf('<data><postpath>%s</postpath></data>', variable_get('cr_hs_endpoint', 'https://www.rednoseday.com/fun-and-games/leaderboard/add'));
+}
+
+
+/**
+ * Outputs the required crossdomain.xml for flash
+ *
+ * @see http://kb2.adobe.com/cps/142/tn_14213.html
+ */
+function cr_hs_crossdomainxml() {
+  // Respect Drupal public-cache settings.
+  // Borrowed from drupal_serve_page_from_cache(), bootstrap.inc.
+  $hook_boot_headers = drupal_get_http_header();
+  $max_age = !isset($_COOKIE[session_name()]) || isset($hook_boot_headers['vary']) ? variable_get('page_cache_maximum_age', 0) : 0;
+  drupal_add_http_header('Cache-Control', 'public, max-age=' . $max_age);
+  drupal_add_http_header("Expires", date("D, d M Y H:i:s", $max_age));
+  drupal_add_http_header('Content-Type', 'text/xml; utf-8;');;
+  $default = '<cross-domain-policy>
+    <site-control permitted-cross-domain-policies="all"/>
+    <allow-access-from domain="*" to-ports="*"/>
+    <allow-http-request-headers-from domain="*" headers="*"/>
+    </cross-domain-policy>';
+  print '<?xml version="1.0" encoding="utf-8" ?>';
+  print variable_get('cr_hs_crossdomain', $default);
+}
+
+/**
+ * Valdiates the nonce
+ *
+ * @param string $n
+ *   The nonce being checked, it has to be 32 chars long
+ *
+ * @return bool
+ *   If the nonce exists in the database then it will return FALSE otherwise it will return TRUE
+ */
+function _cr_hs_validate_nonce($n) {
+  if (strlen($n) == 32) {
+    if (db_table_exists('cr_hs_scores')) {
+      $db_nonce = db_select('cr_hs_scores', 's')
+        ->fields('s', array('nonce'))
+        ->condition('nonce', $n, '=')
+        ->execute()
+        ->fetchAll();
+      return count($db_nonce) <= 0;
+    }
+    else {
+      return FALSE;
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * Validate the username
+ *
+ * @param string $u
+ *   The username to validate
+ *
+ * @return bool
+ *   True if the username is valid otherwise false
+ */
+
+function _cr_hs_validate_username ($u) {
+  if (strlen($u) > 0 && strlen($u) <= 35) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Validates the HMAC
+ *
+ * Uses the PHP hash_hmac with sha256. 
+ * It's based on a concatination of the timestamp and nonce from the submission
+ * The key is a token generated by _cr_hs_generate_token
+ *
+ * @param object $json
+ *   The submitted json object
+ *
+ * @return bool
+ *   TRUE if the HMAC is valid, otherwise returns false
+ */
+
+function _cr_hs_validate_hmac($json) {
+  //Expecting hexits, 32 chars = 64 hexits
+  if (strlen($json['hmac']) == 64) {
+    $test_hmac = hash_hmac('sha256', $json['timestamp'].$json['nonce'], variable_get('cr_hs_api_token'));
+    if ($json['hmac'] == $test_hmac) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}

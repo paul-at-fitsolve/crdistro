@@ -1,0 +1,211 @@
+<?php
+ /**
+  * @file
+  * Module file for cr_fb_share.
+  * 
+  * Takes markup of the form below and renders as a fbshare link
+  * using the feed dialog
+  * 
+  * [fbshare:|url|title|summary]my link[/fbshare]
+  */
+
+define('CR_FB_SHARE_OPEN', '[fbshare]');
+define('CR_FB_SHARE_CLOSE', '[/fbshare]');
+define('CR_FB_SHARE_EXPECTED_PARTS', 4);
+define('CR_FB_SHARE_APP_ID_DEFAULT', 527258650691001);
+
+/**
+ * hook_init implementation
+ */
+function cr_fb_share_add_header(){
+  drupal_add_js(drupal_get_path('module', 'cr_fb_share'). '/js/cr_fb_share.min.js',
+    array('scope' => 'header'));
+
+    // Add FB script to header
+    $fbscript = cr_fb_share_get_fb_script();
+    $fbhead = array(
+      '#type' => 'markup',
+      '#markup' => $fbscript,
+    );
+    drupal_add_html_head( $fbhead , 'fbshare-head'); 
+}
+  
+ /**
+  * Implements hook_filter_info().
+  *
+  * Here we define and describe the filter provided by the module. 
+  */
+ function cr_fb_share_filter_info() {
+   $filters['filter_fbshare'] = array(
+     'title' => t('Facebook share'),
+     'description' => t('Every instance of "[fbshare]*path|*title|summary|*markup[/fbshare]"'. 
+       ' in the input text will be replaced with an Facebook Feed Dialog.'),
+     'process callback'  => '_cr_fb_share_filter_fbshare_process',
+      'tips callback' => '_cr_fb_share_filter_fbshare_tips',
+    );
+
+    return $filters;
+  }
+
+ /**
+  * FB Share filter process callback.
+  *
+  * The actual filtering is performed here. The supplied text should be returned,
+  * once any necessary substitutions have taken place.
+  */
+  function _cr_fb_share_filter_fbshare_process($text, $filter, $format) {
+    global $base_url;
+    if (!cr_fb_share_tags_present($text)){
+      return $text;
+    }
+
+    $tags = cr_fb_share_get_postions($text);
+    $length = $tags['end'] + strlen(CR_FB_SHARE_CLOSE) - $tags['start'];
+
+    $target = substr($text, $tags['start'], $length);
+
+    $share_string = str_replace(CR_FB_SHARE_OPEN, '', $target);
+    $share_string = str_replace(CR_FB_SHARE_CLOSE, '', $share_string);
+
+    $share_values = explode('|', $share_string);
+    $share_keys = array('path', 'title', 'summary', 'markup', 'class');
+      
+    if (count($share_values) < CR_FB_SHARE_EXPECTED_PARTS) {
+      return $text;
+    }
+
+    // Pad the array so we can call array_combine().
+    while (count($share_values) < count($share_keys)) {
+      $share_values[] = '';
+    }
+    
+    $share_data = array_combine($share_keys, $share_values);
+    
+    // sanitise
+    foreach ($share_data as $key => $data) {
+      switch($key){  
+        case 'markup':
+          $share_data[$key] = filter_xss($data, array('span'));
+          break;
+        case 'path':
+          $data = trim(check_plain($data));
+          $path = drupal_get_path_alias($data);
+          
+          if ($path == FALSE) {
+            return $text;
+          }
+          $url_path = $base_url . '/' . $path;
+          $path_url = parse_url($url_path);
+          $share_data[$key] = $path_url['host'] . $path_url ['path'];
+          break;
+
+        case 'class':
+          $share_data[$key] = explode(' ', trim($data));
+          $share_data[$key][] = 'cta';
+          break;
+
+        default:
+          $share_data[$key] = trim(check_plain($data));
+          break;
+      }
+    }
+    // TODO Admin screen for AppId
+    $share_data['appId'] = variable_get('cr_fb_share_appId', CR_FB_SHARE_APP_ID_DEFAULT);
+    
+    cr_fb_share_add_header();
+
+    // Create js settings
+    drupal_add_js(array('cr_fb_share' => $share_data), 'setting');
+    $replacement = l($share_data['markup'], '#', array(
+      'html' => TRUE,
+      'external' => TRUE,
+      'fragment' => '',
+      'attributes' => array(
+        'rel' => 'facebook',
+        'id' => 'cr_fb_share',
+        'class' => $share_data['class'],
+      ),
+    ));
+
+    return str_replace($target, $replacement, $text);
+  }
+  
+  /**
+   * Detect if the fbshare tags presence and order 
+   * @param string $text
+   * @return boolean
+   */
+  function cr_fb_share_tags_present($text){
+    $positions = cr_fb_share_get_postions($text);
+    if ($positions['start'] !== FALSE &&
+       ($positions['end'] > $positions['start'])) {
+        return TRUE;
+    }
+    return FALSE;
+  }
+  
+  /**
+   * Find fbshare token positions in the text
+   * @param string $text
+   * @return array
+   */
+  function cr_fb_share_get_postions($text){
+    return array(
+      'start' => strpos($text, CR_FB_SHARE_OPEN), 
+      'end' => strpos($text, CR_FB_SHARE_CLOSE)
+    );
+  }
+  
+  /**
+   * Retrieve Facebook SDK script
+   * @return string 
+   */
+  function cr_fb_share_get_fb_script(){
+     
+    $appId = variable_get('cr_fb_share_appId', CR_FB_SHARE_APP_ID_DEFAULT);
+      
+    return '<script>
+      window.fbAsyncInit = function() {
+        FB.init({
+          appId      : '. $appId .',
+          status     : true,
+          xfbml      : true
+        });
+      };
+
+      (function(d, s, id){
+         var js, fjs = d.getElementsByTagName(s)[0];
+         if (d.getElementById(id)) {return;}
+         js = d.createElement(s); js.id = id;
+         js.src = "//connect.facebook.net/en_US/all.js";
+         fjs.parentNode.insertBefore(js, fjs);
+       }(document, \'script\', \'facebook-jssdk\'));
+    </script>';
+  }
+  
+ /**
+  * Provides descriptions for use of the input filter
+  * 
+  * @param type $filter
+  * @param type $format
+  * @param boolean $long
+  * @return string
+  */ 
+ function _cr_fb_share_filter_fbshare_tips($filter, $format, $long = FALSE) {
+
+  if (!$long) {
+    // This string will be shown in the content add/edit form
+    return t('Tags of the form "[fbshare]path|title|summary|link text|classes[/fbshare]"'.
+       ' will be replaced with a Facebook Feed Dialog.');
+  }
+  else {
+    return '<p>--- Facebook Share ---<br>' . 
+      t('Every instance of "[fbshare]path|title|summary|link text|classes[/fbshare]"'.
+      ' in the input text will be replaced with a Facebook Feed Dialog.') . 
+      '<br/>' . t('path - the drupal path alias,  title - share dialog title, ' . 
+      'summary - a description of the subject being shared, link text - ' . 
+      'text for link triggering the share dialog, classes - optional list of ' .
+      'HTML classes') .
+      '<br>------------</p>';
+  }
+}

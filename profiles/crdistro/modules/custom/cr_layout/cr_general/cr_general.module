@@ -1,0 +1,1511 @@
+<?php
+/**
+ * This module is for commonly used settings which are likely to be used across all 3 of our core sites.  These are things such as:
+ ** Campaign ID
+ ** Custom formatters
+ ** Custom text filters
+ ** Custom Tokens
+ */
+
+define('SHOP_PREFIX_PROD', 'http://shop.sportrelief.com/');
+define('SHOP_PREFIX_QA',   'http://beta.nexdox.com/DWCOMIC14_SHOP_QA/');
+define('SHOP_PREFIX_DEV',  'http://beta.nexdox.com/DWCOMIC14_SHOP/');
+
+/** FROST URL's to be used in tokens **/
+define('FROST_PROD', 'http://my.rednoseday.com/');
+define('FROST_DEV', 'http://dev-frost.comicrelief.com/');
+define('FROST_UAT', 'http://uat-frost.comicrelief.com/');
+define('FROST_STAGING', 'http://staging-frost.comicrelief.com/');
+
+define('FROST_SR_DEV', 'http://sr-dev-frost.comicrelief.com/');
+define('FROST_SR_STAGING', 'http://sr-staging-frost.comicrelief.com/');
+define('FROST_SR_QA', 'http://sr-qa-frost.comicrelief.com/');
+define('FROST_SR_UAT', 'http://sr-uat-frost.comicrelief.com/');
+define('FROST_SR_PROD', 'http://my.sportrelief.com/');
+
+
+/**
+ * Implements hook_menu().
+ */
+function cr_general_menu() {
+  $items = array();
+  // Devel token pages.
+  if (module_exists('token')) {
+    $items['admin/config/development/token-list'] = array(
+      'title' => t('Token List'),
+      'description' => t('A list of available tokens'),
+      'page callback' => 'cr_general_token_output',
+      'access arguments' => array('administer site configuration') ,
+      'type' => MENU_LOCAL_TASK,
+    );
+  }
+  return $items;
+}
+
+/**
+ * Borrowed from Token module, a siplay of all tokens
+ */
+function cr_general_token_output(){
+  $output = "";
+
+  $output = '<dl>';
+  $output .= '<dt>' . t('List of the currently available tokens on this site') . '</dt>';
+  $output .= '<dd>' . theme('token_tree', array('token_types' => 'all', 'click_insert' => FALSE, 'show_restricted' => TRUE)) . '</dd>';
+  $output .= '</dl>';
+  
+  return $output;
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function cr_general_ctools_plugin_directory($module, $plugin) {
+  if ($module == 'ctools' && !empty($plugin)) {
+    return "plugins/$plugin";
+  }
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+// More information on custom formatters can be found at: http://www.metaltoad.com/blog/drupal-7-tutorial-creating-custom-formatters
+function cr_general_field_formatter_info() {
+  return array(
+    'cr_general_h2' => array( //Machine name of the formatter
+      'label' => t('Header'),
+      'field types' => array('text'), //This will only be available to text fields
+      'settings'  => array( //Array of the settings we'll create
+        'header_type' => 'h2', //give a default value for when the form is first loaded
+      ),
+    ),
+    'cr_general_wrapper' => array( //Machine name of the formatter
+      'label' => t('Wrapper'),
+      'field types' => array('text'), //This will only be available to text fields
+      'settings'  => array( //Array of the settings we'll create
+        'wrapper_type' => 'span', //give a default value for when the form is first loaded
+        'class_name' => 'wrapped-item', //give a default value for when the form is first loaded
+      ),
+    ),
+    'cr_general_cta' => array( //Machine name of the formatter
+      'label' => t('CTA'),
+      'field types' => array('link_field'), //This will only be available to text fields
+      'settings'  => array(
+        'cta_type' => 'cta',
+      ),
+    ),
+    // Rewrite the formatter from field_collection module as it inserts wasted html
+    'cr_general_field_collection_view' => array( //Machine name of the formatter
+      'label' => t('CR Field Collection'),
+      'field types' => array('field_collection'), //This will only be available to text fields
+      'settings' =>  array(
+        'edit' => t('Edit'),
+        'delete' => t('Delete'),
+        'add' => t('Add'),
+        'description' => TRUE,
+        'view_mode' => 'full',
+      ),
+    ),
+    // Rewrite the formatter from field_collection module as it inserts wasted html
+    'cr_general_list_downloadables' => array( //Machine name of the formatter
+      'label' => t('CR list downloadable'),
+      'field types' => array('entityreference'), //This will only be available to text fields
+      'settings' =>  array(
+        'field_name' => 'field_downloadable',
+        'field_css_class' => '',
+        'field_open_new_window' => 0,
+      ),
+    ),
+    // Rewrite the formatter from field_collection module as it inserts wasted html
+    'cr_general_list_downloadables_ctaonly' => array( //Machine name of the formatter
+      'label' => t('CR list downloadable: CTA only'),
+      'field types' => array('entityreference'), //This will only be available to text fields
+      'settings' =>  array(
+        'field_name' => 'field_downloadable',
+        'field_css_class' => '',
+        'field_open_new_window' => 0,
+      ),
+    ),
+    // Rewrite the formatter from field_collection module as it inserts wasted html
+    'cr_general_list_downloadables_minimal' => array( //Machine name of the formatter
+      'label' => t('CR list downloadable: minimal'),
+      'field types' => array('entityreference'), //This will only be available to text fields
+      'settings' =>  array(
+        'field_name' => 'field_downloadable',
+        'field_css_class' => '',
+        'field_open_new_window' => 0,
+      ),
+    ),
+    // Rewrite the formatter from field_collection module as it inserts wasted html
+    'cr_general_list_download_all' => array( //Machine name of the formatter
+      'label' => t('CR list download all'),
+      'field types' => array('entityreference'), //This will only be available to text fields
+      'settings' =>  array(
+        'field_name' => 'field_downloadable'
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_settings_form().
+ */
+function cr_general_field_formatter_settings_form($field, $instance, $view_mode, $form, &$form_state) {
+
+  //This gets the view_mode where our settings are stored
+  $display = $instance['display'][$view_mode];
+  //This gets the actual settings
+  $settings = $display['settings'];
+  //Initialize the element variable
+  $element = array();
+
+  switch($display['type']){
+    case 'cr_general_h2':
+      //Add your select box
+      $element['header_type'] = array(
+        '#type'           => 'select',                           // Use a select box widget
+        '#title'          => t('Heading Type'),                   // Widget label
+        '#description'    => t('Select what type of heading you want to use here'), // Helper text
+        '#default_value'  => $settings['h2'],              // Get the value if it's already been set
+        '#options'        => array(
+          'h1'  => 'h1',
+          'h2'  => 'h2',
+          'h3'  => 'h3',
+          'h4'  => 'h4',
+          'h5'  => 'h5',
+          'h6'  => 'h6',
+        ),
+      );
+      break;
+    case 'cr_general_wrapper':
+      //Add your select box
+      $element['wrapper_type'] = array(
+        '#type'           => 'select',                           // Use a select box widget
+        '#title'          => t('Wrapper Type'),                   // Widget label
+        '#description'    => t('Select what type of wrapper you want to use here'), // Helper text
+        '#default_value'  => $settings['span'],                // Get the value if it's already been set
+        '#description' => t('Set the wrapper to use.'),
+        '#options'        => array(
+          'span'  => 'span',
+          'p'  => 'p',
+        ),
+      );
+      $element['class_name'] = array(
+        '#type'           => 'textfield',                           // Use a select box widget
+        '#title'          => t('Class Name'),                   // Widget label
+        '#description'    => t('Insert the class name you would like to use.'), // Helper text
+        '#default_value'  => $settings['wrapped-item'],               // Get the value if it's already been set
+        '#description' => t('Add a class to the wrapped item.'),
+      );
+      break;
+    case 'cr_general_cta':
+      $element['cta_type'] = array(
+        '#type'           => 'select',                           // Use a select box widget
+        '#title'          => t('CTA Type'),                   // Widget label
+        '#description'    => t('Select what type of CTA you want to use here'), // Helper text
+        '#default_value'  => $settings['cta'],              // Get the value if it's already been set
+        '#options'        => array(
+          'cta'  => 'cta',
+          'button'  => 'button',
+        ),
+      );
+      break;
+    case 'cr_general_field_collection_view':
+      $element['edit'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Edit link title'),
+        '#default_value' => $settings['edit'],
+        '#description' => t('Leave the title empty, to hide the link.'),
+      );
+      $element['delete'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Delete link title'),
+        '#default_value' => $settings['delete'],
+        '#description' => t('Leave the title empty, to hide the link.'),
+      );
+      $element['add'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Add link title'),
+        '#default_value' => $settings['add'],
+        '#description' => t('Leave the title empty, to hide the link.'),
+      );
+      $element['description'] = array(
+        '#type' => 'checkbox',
+        '#title' => t('Show the field description beside the add link.'),
+        '#default_value' => $settings['description'],
+        '#description' => t('If enabled and the add link is shown, the field description is shown in front of the add link.'),
+      );
+          $entity_type = entity_get_info('field_collection_item');
+      $options = array();
+      foreach ($entity_type['view modes'] as $mode => $info) {
+        $options[$mode] = $info['label'];
+      }
+
+      $element['view_mode'] = array(
+        '#type' => 'select',
+        '#title' => t('View mode'),
+        '#options' => $options,
+        '#default_value' => $settings['view_mode'],
+        '#description' => t('Select the view mode'),
+      );
+      break;
+    case 'cr_general_list_downloadables':
+    case 'cr_general_list_downloadables_ctaonly':
+    case 'cr_general_list_downloadables_minimal':
+      $element['field_name'] = array(
+        '#type'           => 'textfield',                           // Use a select box widget
+        '#title'          => t('Fieldname'),                   // Widget label
+        '#description'    => t('Select what type of CTA you want to use here'), // Helper text
+        '#default_value'  => (isset($settings['field_name']) ? $settings['field_name'] : 'field_downloadable'),              // Get the value if it's already been set
+        '#description' => t('Set the fieldname to use, this should start with field_ so an example would be field_downloadable'),
+      );
+      $element['field_css_class'] = array(
+        '#type'           => 'textfield',                           // Use a select box widget
+        '#title'          => t('Custom CSS Class'),                   // Widget label
+        '#description'    => t('Insert CSS class to be used on "li" element'), // Helper text
+        '#default_value'  => (isset($settings['field_css_class']) ? $settings['field_css_class'] : ''),              // Get the value if it's already been set
+      );
+      $element['field_open_new_window'] = array(
+        '#type'           => 'checkbox',                           // Use a select box widget
+        '#title'          => t('Open in new window'),                   // Widget label
+        '#description'    => t('On click will open in a new window'), // Helper text
+        '#default_value'  => (isset($settings['field_open_new_window']) ? $settings['field_open_new_window'] : ''),              // Get the value if it's already been set
+      );
+      break;
+    case 'cr_general_list_download_all':
+      $element['field_name'] = array(
+        '#type'           => 'textfield',                           // Use a select box widget
+        '#title'          => t('Fieldname'),                   // Widget label
+        '#description'    => t('Select what type of CTA you want to use here'), // Helper text
+        '#default_value'  => (isset($settings['field_name']) ? $settings['field_name'] : 'field_downloadable'),              // Get the value if it's already been set
+        '#description' => t('Set the fieldname to use, this should start with field_ so an example would be field_downloadable'),
+      );
+      break;
+  }
+  return $element;
+}
+
+
+
+/**
+ * Implements hook_field_formatter_settings_summary().
+ */
+function cr_general_field_formatter_settings_summary($field, $instance, $view_mode) {
+  $display = $instance['display'][$view_mode];
+  $settings = $display['settings'];
+
+  switch($display['type']){
+    case 'cr_general_h2':
+      $summary = t('Render text using a header format of "@header_type"', array(
+        '@header_type'     => $settings['header_type'],
+      )); // we use t() for translation and placeholders to guard against attacks
+      break;
+    case 'cr_general_cta':
+      $summary = t('Display a @cta_type to the user', array(
+        '@cta_type'     => $settings['cta_type'],
+      ));
+      break;
+    case 'cr_general_field_collection_view':
+      $entity_type = entity_get_info('field_collection_item');
+      $summary = t('View mode: @mode', array('@mode' => $entity_type['view modes'][$settings['view_mode']]['label']));
+      break;
+    case 'cr_general_list_download_all':
+      $summary = t('Display the downloadable all.');
+      break;
+    case 'cr_general_list_downloadables':
+      $summary = t('Display the downloadabled as a list of files.');
+      break;
+    case 'cr_general_list_downloadables_ctaonly':
+      $summary = t('Display the downloadable as a list of files.  But only show the cta.');
+      break;
+    case 'cr_general_list_downloadables_minimal':
+      $summary = t('Display the downloadable as a list of files.  But only shows the type and file size.');
+      break;
+    case 'cr_general_wrapper':
+      $summary = t('Wrap the value in your chosen element. Default is a span tag.');
+      break;
+  }
+  return $summary;
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function cr_general_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array(); // Initialize the var
+  $settings = $display['settings']; // get the settings
+
+  // @todo: we are being passed a lot of bogus fields here
+  // They have 0 or 1 items, 1 item looks like this:
+  // value (String, 0 characters )
+  // format (NULL)
+  // safe_value (String, 0 characters )
+  // formatter (String, 12 characters ) text_default
+  // title (String, 0 characters )
+  // url (String, 0 characters )
+  switch($display['type']){
+    case 'cr_general_h2':
+      $header_type = $settings['header_type']; // The Size setting selected in the settings form
+
+      foreach ($items as $delta => $item) {
+        $safe_value = strip_tags($item['value'], '<strong><em><br>');
+        $heading_copy = $safe_value; // Getting the actual value
+         if (trim($item['value'])) {
+          $heading = '<' . $header_type . '>' . $heading_copy . '</' . $header_type . '>';
+          $element[$delta]['#markup'] = $heading; // Assign it to the #markup of the element
+         }
+      }
+      return $element;
+      break;
+    case 'cr_general_wrapper':
+      $wrapper_type = $settings['wrapper_type']; // The Size setting selected in the settings form
+      $class = ($settings['class_name'] ? ' class="'. $settings['class_name'] . '"' : '');
+
+      foreach ($items as $delta => $item) {
+       $wrapper_copy = $item['safe_value']; // Getting the actual value
+        if(isset($item['safe_value'])) {
+        $wrapper = '<' . $wrapper_type . $class . '>' . $wrapper_copy . '</' . $wrapper_type . '>';
+        $element[$delta]['#markup'] = $wrapper; // Assign it to the #markup of the element
+        }
+      }
+      return $element;
+      break;
+    case 'cr_general_cta':
+
+      foreach ($items as $delta => $item) {
+        if(is_array($item) && array_key_exists('title', $item) && strlen($item['title']) > 0) {
+
+          $link_title = '<span class="text">' . $item['title'] . '<span></span></span>';
+          //$element[$delta]['#markup'] = sprintf('<a class="%s" href="%s"><span class="text">%s<span></span></span></a>', 'cta_button btn red', $url, $item['title']);
+
+          $options = array(
+            'html' => TRUE,
+          );
+
+          // If query detected append to options array
+          if(isset($item['query'])) {
+            $options = array_merge($options, array('query' => $item['query']));
+          }
+
+          // If fragment detected append to options array
+          if(isset($item['fragment'])) {
+            $options = array_merge($options, array('fragment' => $item['fragment']));
+          }
+
+          // If CTA link, apply cta classes to options array
+          if($settings['cta_type'] == 'cta') {
+            $attributes['attributes'] = array('class' => array('cta_' . $settings['cta_type'], 'cta'));
+
+            $link_title = $item['title'] . '<span class="pointer">&nbsp;</span>';
+          }
+          else{
+            $attributes['attributes'] = array('class' => array('cta_button', 'btn', 'red'));
+          }
+
+          // if 'http://' included then make link external
+          if( strpos($item['url'], 'http://') !== FALSE  && _cr_general_check_cta_domain($item['url']) == 0) {
+            $attributes['attributes']['target'] = '_blank';
+          }
+
+          $options = array_merge($options, $attributes);
+
+          // IMPORTANT TO USE l() FOR LINKS!! Uses drupal router table to figure out aliases to nodes and other drupal
+          // specific shortcuts. node/123 with now retrieve alias 'this-is-test-page'
+          $element[$delta]['#markup'] = check_markup(l($link_title, $item['url'],$options), 'links');
+        }
+      }
+      return $element;
+      break;
+    case 'cr_general_field_collection_view':
+      $element['#attached']['css'][] = drupal_get_path('module', 'field_collection') . '/field_collection.theme.css';
+      $view_mode = !empty($display['settings']['view_mode']) ? $display['settings']['view_mode'] : 'full';
+      foreach ($items as $delta => $item) {
+        if ($field_collection = field_collection_field_get_entity($item)) {
+          $element[$delta]['entity'] = $field_collection->view($view_mode);
+          //$element[$delta]['#theme_wrappers'] = array('field_collection_view');
+
+          $field_key = $item['value'];
+          $field_fc_fields = entity_load('field_collection_item', array($field_key));
+
+          // Get variables and insert into the classes array to assist in theming
+          switch($field_fc_fields[$field_key]->field_name){
+            case 'field_columns':
+              $element[$delta]['#attributes']['class'][] = 'column'; // field_name
+              $element[$delta]['#attributes']['class'][] = 'column' . '-' . ($delta +1); // column number
+
+              if(isset($field_fc_fields[$field_key]->field_media_position['und'][0])) {
+                $pieces = explode('-', $field_fc_fields[$field_key]->field_media_position['und'][0]['value']);
+                for($i = 0; $i < count($pieces); $i++) {
+                  $element[$delta]['#attributes']['class'][] = 'mediaposition-' . $pieces[$i];
+                }
+              }
+              break;
+            case 'field_promo':
+            case 'field_promo_home':
+              // Responsive status dropdown in content type has a 'none' option, if 'none' is selected return an empty string
+              $responsive_status = isset($entity->field_responsive_status[$entity->language][0]['value']);
+              $responsive_status = ($responsive_status ? $entity->field_responsive_status[$entity->language][0]['value'] : "");
+
+              $tab_type = isset($entity->field_tab_type[$entity->language][0]['value']);
+              $tab_type = ($tab_type ? $entity->field_tab_type[$entity->language][0]['value'] : "");
+
+              $default_tab = isset($entity->field_default_tab[$entity->language][0]['value']);
+              $default_tab = ($default_tab ? $entity->field_default_tab[$entity->language][0]['value'] : "");
+
+              //$element[$delta]['#attributes']['class'][] = 'totalcolumns_' . (sizeof($element)-1); // total columns
+              $element[$delta]['#attributes']['class'][] = $field_fc_fields[$field_key]->field_name; // fieldset_name
+              (isset($entity->field_transition_type['und'][0]['value']) ? $element[$delta]['#attributes']['class'][] = 'transitiontype_' . $entity->field_transition_type['und'][0]['value'] : NULL); // transition_type
+              $element[$delta]['#attributes']['class'][] = 'tabtype_' . $tab_type; // tab_type
+              $element[$delta]['#attributes']['class'][] = 'defaulttab_' . $default_tab; // default_tab
+              $element[$delta]['#attributes']['class'][] = 'responsivestatus_' . str_replace(' ', '', $responsive_status); // responsive_status
+              $element[$delta]['#attributes']['class'][] = 'columnset'; // fieldset_name
+              $element[$delta]['#attributes']['class'][] = 'columnset-' . ($delta +1); // main content number
+              break;
+            case 'field_main_content':
+            //dpm(sizeof($element)-1);
+              //$element[$delta]['#attributes']['class'][] = 'totalcolumns_' . (sizeof($element)-1); // total columns
+              // Responsive status dropdown in content type has a 'none' option, if 'none' is selected return an empty string
+              $responsive_status = isset($field_fc_fields[$field_key]->field_responsive_status['und'][0]['value']);
+              $responsive_status = ($responsive_status ? $field_fc_fields[$field_key]->field_responsive_status['und'][0]['value'] : "");
+              $element[$delta]['#attributes']['class'][] = 'responsivestatus_' . str_replace(' ', '', $responsive_status); // responsive_status
+              $element[$delta]['#attributes']['class'][] = $field_fc_fields[$field_key]->field_name; // fieldset_name
+              $element[$delta]['#attributes']['class'][] = 'columnset'; // fieldset_name
+              $element[$delta]['#attributes']['class'][] = 'columnset-' . ($delta +1); // main content number
+              break;
+            case 'field_sub_pods':
+              // Responsive status dropdown in content type has a 'none' option, if 'none' is selected return an empty string
+              $responsive_status = isset($field_fc_fields[$field_key]->field_responsive_status['und'][0]['value']);
+              $responsive_status = ($responsive_status ? $field_fc_fields[$field_key]->field_responsive_status['und'][0]['value'] : "");
+              $element[$delta]['#attributes']['class'][] = 'responsivestatus_' . str_replace(' ', '', $responsive_status); // responsive_status
+              break;
+
+            default:
+              $element[$delta]['#attributes']['class'][] = 'field-collection-view';
+              $element[$delta]['#attributes']['class'][] = 'clearfix';
+              $element[$delta]['#attributes']['class'][] = drupal_clean_css_identifier('view-mode-' . $view_mode);
+          }
+
+          $links = array(
+            '#theme' => 'links__field_collection_view',
+          );
+          $links['#attributes']['class'][] = 'field-collection-view-links';
+          foreach (array('edit', 'delete') as $op) {
+            if ($settings[$op] && field_collection_item_access($op == 'edit' ? 'update' : $op, $field_collection)) {
+              $links['#links'][$op] = array(
+                'title' => entity_i18n_string("field:{$field['field_name']}:{$instance['bundle']}:setting_$op", $settings[$op]),
+                'href' => $field_collection->path() . '/' . $op,
+                'query' => drupal_get_destination(),
+              );
+            }
+          }
+          $element[$delta]['links'] = $links;
+        }
+      }
+      return _cr_field_collection_field_formatter_links($element, $entity_type, $entity, $field, $instance, $langcode, $items, $display);
+      break;
+    case 'cr_general_list_downloadables':
+    case 'cr_general_list_downloadables_ctaonly':
+    case 'cr_general_list_downloadables_minimal':
+
+      $target_ids = array();
+
+      foreach($items as $item){
+        $target_ids[] = $item['target_id'];
+      }
+
+      // Load Downloadable entity
+      $dowmloadable_entities = entity_load("downloadable",$target_ids);
+
+
+      //$files = file_load_multiple($target_ids);
+      //dsm($files);
+      $list_items =  array();
+
+      foreach ($dowmloadable_entities as $downloadable) {
+
+        $file = file_load($downloadable->file_upload);
+
+        //needs to say if no file or url
+        if(!$file && $downloadable->url == '') continue;
+
+        $options = array();
+        $row_class = strtolower(str_replace('_', '-', $downloadable->name));
+
+        if($file) {
+          $tidied_size = _cr_general_tidysize($file->filesize);
+          $file_name = $file->filename;
+          $link_url = file_create_url($file->uri);
+          $filetype = strtoupper(substr(strrchr($file_name,'.'), 1));
+        }
+        $title = check_plain($downloadable->label);
+        $cta_title = check_plain($downloadable->cta);
+
+
+        $link_classes = 'btn--download';
+        $options['attributes'] = array('class' => $row_class);
+        $options['html'] = TRUE;
+
+
+        // Link override
+        if( !empty($downloadable->url)  && sizeof($downloadable->url) > 0 ) {
+          $link_url = check_url($downloadable->url);
+          // Check for tokens
+          $link_url = token_replace($link_url);
+          $options['attributes']['title'] = $cta_title;
+          $link_classes = 'btn--cta';
+        }
+
+        if(($display['type'] === 'cr_general_list_downloadables_ctaonly')) {
+          $link_text = '<span class="' . $link_classes . '"><span class="icon"></span></span><span class="text">' . $cta_title . '</span>';
+        }
+        else if(($display['type'] === 'cr_general_list_downloadables_minimal')) {
+          $link_text = '<span class="' . $link_classes . '"><span class="icon"></span></span><span class="text">' . $filetype . ' (' . $tidied_size['tidied_size_int'] . strtolower($tidied_size['tidied_size_metric']) . ')</span>';
+        }
+        else {
+          $link_text = '<span class="' . $link_classes . '"><span class="icon"></span></span><span class="text">' . $title . ' ' . $filetype . ' (' . $tidied_size['tidied_size'] . ' ' . $tidied_size['tidied_size_metric'] . ')</span>';
+        }
+
+        //Add custom class if present
+        if(isset($settings['field_open_new_window']) && !empty($settings['field_open_new_window'])){
+          $options['attributes'] += array('target' => '_blank');
+        }
+
+        // Due to the implementation of protocol relative paths, the url() function gets upset, which appears to only really break downloadables in IE, so here is a regex fix for it
+        $final_link = preg_replace('/(?<=href=\")(.*\/\/\/)/', '//', l($link_text, $link_url, $options));
+        $list_item = array('data' => $final_link);
+
+        //Add custom class if present
+        if(isset($settings['field_css_class']) && !empty($settings['field_css_class'])){
+          $custom_css_class = check_plain($settings['field_css_class']);
+          $custom_css_class = strtolower(str_replace(" ","",$custom_css_class));
+          $list_item += array('class' => array($custom_css_class));
+        }
+
+        $list_items[] = $list_item;
+
+        //$file_type = _cr_general_filetype($op->{$settings['field_name']}['und'][0]['filemime']);
+        //$list_items[]['data'] = l($op->title, file_create_url($op->{$settings['field_name']}['und'][0]['uri']), $options);
+      }
+
+
+      $element[0]['#markup'] = theme('item_list', array('items' => $list_items));
+
+      return $element;
+      break;
+
+
+    case 'cr_general_list_download_all':
+      $new_items = array();
+
+      // Restructure items array so it is useable
+      foreach ($items as $item) {
+        $new_items[] = $item['target_id'];
+      }
+
+      $files = entity_load('node', $new_items);
+      $list_items =  array();
+
+      foreach ($files as $op) {
+
+        $options = array();
+        $link_classes = 'btn red btn-download';
+
+        $tidied_size = _cr_general_tidysize($op->{$settings['field_name']}['und'][0]['filesize']);
+        $file_name = ($op->{$settings['field_name']}['und'][0]['filename']);
+        $title = 'Download All Files<small>' . ' ' . substr(strrchr($file_name,'.'), 1);
+
+        $options['attributes'] = array('class' => $link_classes);
+        $options['html'] = TRUE;
+
+        // Title override
+        if( isset($op->field_filename_override[$op->language])
+          && !empty($op->field_filename_override[$op->language][0]['safe_value'])) {
+          $title = $op->field_filename_override[$op->language][0]['safe_value'] . ' <small>' . substr(strrchr($file_name,'.'), 1);
+        }
+
+        // Link override
+        if( isset($op->field_link_to[$op->language])
+          && !empty($op->field_link_to[$op->language][0]['safe_value']) ) {
+
+          $link_url = $op->field_link_to['und'][0]['url'];
+          $options['attributes']['title'] = $op->field_link_to['und'][0]['title'];
+          $link_classes .= ' link-to';
+
+        }
+
+
+        $link_text = '<span class="text"><span class="icon"></span>' . $title . ' (' . $tidied_size['tidied_size'] . ' ' . $tidied_size['tidied_size_metric'] . ')' . '</small></span>';
+        $link_url = file_create_url($op->{$settings['field_name']}['und'][0]['uri']);
+
+        $list_items[]['data'] = preg_replace('/(?<=href=\")(.*\/\/\/)/', '//', l($link_text, $link_url, $options));
+      }
+
+      $element[0]['#markup'] = theme('item_list', array('items' => $list_items));
+
+      return $element;
+      break;
+  }
+}
+
+
+
+function get_file_extension($file_name)
+{
+  return substr(strrchr($file_name,'.'),1);
+}
+
+/**
+ * Convert bytes to human readable format
+ *
+ * @param integer bytes Size in bytes to convert
+ * @param integer count of point precision to return
+ * @return string
+ */
+function formatBytesToArray($bytes, $precision = 2) {
+    $units = array('B', 'KB', 'MB', 'GB', 'TB');
+
+    $bytes = max($bytes, 0);
+    $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
+    $pow = min($pow, count($units) - 1);
+
+    $bytes /= pow(1024, $pow);
+
+    return array('size' => round($bytes, $precision), 'size_int' => round($bytes, 0), 'metric' => $units[$pow]);
+}
+
+function _cr_general_tidysize($filesize) {
+  // Declare array variables with function variables
+  $sizedetails = array();
+  $sizedetails['original_size'] = $filesize;
+  $sizedetails['original_size_metric'] = 'bytes';
+
+  $humanSize = formatBytesToArray($filesize, 2);
+  $sizedetails['tidied_size'] = $humanSize['size'];
+  $sizedetails['tidied_size_int'] = $humanSize['size_int'];
+  $sizedetails['tidied_size_metric'] = $humanSize['metric'];
+
+  return $sizedetails;
+}
+
+
+/**
+ * Modify the function used by field_collection module
+ */
+function _cr_field_collection_field_formatter_links(&$element, $entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $settings = $display['settings'];
+
+  if ($settings['add'] && ($field['cardinality'] == FIELD_CARDINALITY_UNLIMITED || count($items) < $field['cardinality'])) {
+    // Check whether the current is allowed to create a new item.
+    $field_collection_item = entity_create('field_collection_item', array('field_name' => $field['field_name']));
+    $field_collection_item->setHostEntity($entity_type, $entity, LANGUAGE_NONE, FALSE);
+
+    if (field_collection_item_access('create', $field_collection_item)) {
+      $path = field_collection_field_get_path($field);
+      list($id) = entity_extract_ids($entity_type, $entity);
+      $element['#suffix'] = '';
+      if (!empty($settings['description'])) {
+        $element['#suffix'] .= '<div class="description field-collection-description">' . field_filter_xss($instance['description']) . '</div>';
+      }
+      $title = entity_i18n_string("field:{$field['field_name']}:{$instance['bundle']}:setting_add", $settings['add']);
+      $add_path = $path . '/add/' . $entity_type . '/' . $id;
+      $element['#suffix'] .= '<ul class="action-links action-links-field-collection-add"><li>';
+      $element['#suffix'] .= l($title, $add_path, array('query' => drupal_get_destination()));
+      $element['#suffix'] .= '</li></ul>';
+    }
+  }
+  // If there is no add link, add a special class to the last item.
+  if (empty($element['#suffix'])) {
+    $index = count(element_children($element)) - 1;
+    $element[$index]['#attributes']['class'][] = 'field-collection-view-final';
+  }
+
+  return $element;
+}
+
+
+
+/**
+ * hook_entity_info_alter()
+ *
+ * Create custom display for entities
+ */
+function cr_general_entity_info_alter(&$entity_info) {
+    $entity_info['node']['view modes']['downloadable'] = array('label' => 'Display downloadable', 'custom settings' => 'TRUE');
+}
+
+
+
+/**
+* Implements hook_filter_info().
+*/
+function cr_general_filter_info() {
+  $filters = array();
+  $filters['cr_general_filter_downloadables'] = array(
+    'title' => t('Downloadable filter'),
+    'description' => t('Allows for us to embed downloadables into the page using a token style formatting.'),
+    'prepare callback' => '_cr_general_prepare',
+    'process callback' => '_cr_general_process',
+  );
+  return $filters;
+}
+
+
+
+/**
+ * Implements filter process callback.
+ */
+function _cr_general_process($text, $filter, $format) {
+
+  // If $text is encoded, convert [, ] into proper html
+  $text = preg_replace('|(%5B)(.*)(%5D)|', '[$2]', $text);
+
+  $replacement = preg_replace_callback('|\[downloadable\?[\/\=.0-9a-zA-Z_&]+\]|i', '_cr_general_filter_downloadables_filter', $text);
+
+  $replacement = preg_replace_callback('|\[downloadable_url\?[\/\=.0-9a-zA-Z_&]+\]|i', '_cr_general_filter_downloadables_url_filter', $text);
+  return $replacement;
+}
+
+
+
+/**
+ * A custom function to tweak the filters output with the downloadable path
+ */
+function _cr_general_filter_downloadables_filter($matches) {
+  preg_match('|(?<=\[downloadable\?).*(?=\])|i', $matches[0], $query_matches);
+  parse_str($query_matches[0], $queryarray);
+  $file = entity_load('node', array($queryarray['nid']));
+  $downloadable_link = l($file[$queryarray['nid']]->title, file_create_url($file[$queryarray['nid']]->field_downloadable['und'][0]['uri']));
+  return preg_replace('/^\/\//i', '/', $downloadable_link);
+}
+
+/**
+ * A custom function to tweak the filters output with the downloadable path
+ */
+function _cr_general_filter_downloadables_url_filter($matches) {
+  preg_match('|(?<=\[downloadable_url\?).*(?=\])|i', $matches[0], $query_matches);
+  parse_str($query_matches[0], $queryarray);
+  $file = entity_load('node', array($queryarray['nid']));
+  $downloadable_link = url(file_create_url($file[$queryarray['nid']]->field_downloadable['und'][0]['uri']));
+  return preg_replace('/^\/\//i', '/', $downloadable_link);
+}
+
+/**
+ * Implements hook_preprocess_block()
+ *
+ * Performs token replacement on block/box copy
+ *
+ * This is being performed on nodes too, as well as in their edit forms? Need to remove that.
+ * Todo: Find a better way of doing this. Do selective token replacements based on input filter and for certain fields e.g. CTAs
+ * Updated J.P.: Added an exception for this on the fundraise showcase form which is exposed to visitors
+ */
+function cr_general_preprocess_block(&$variables) {
+  $current_url = drupal_get_path_alias(request_uri(), 1);
+/*
+  if($current_url == '/fundraise/fundraiser-photos/add' && $variables['block']->delta == 'main')
+    return;
+
+  $variables['content'] = token_replace($variables['content']);
+  */
+}
+
+/**
+ * Implements hook_token_info()
+ */
+function cr_general_token_info() {
+  $types['path'] = array(
+    'name' => t("Paths"),
+    'description' => t("Tokens which resolve into urls"),
+  );
+  // Andy Pangus specific tokens.
+  $path['theme_images'] = array(
+    'name' => t("Theme images path"),
+    'description' => t("Resolves to the front end theme images path"),
+  );
+  $path['theme'] = array(
+    'name' => t("Theme Path"),
+    'description' => t("Resolves to the front end theme path"),
+  );
+  $path['theme_logo_url'] = array(
+    'name' => t('Theme Logo Url'),
+    'description' => t('Provides the url to the current site logo as set in theme settings'),
+  );
+  $path['library'] = array(
+    'name' => t("Library Path"),
+    'description' => t("Resolves to /sites/all/libraries/"),
+  );
+  $path['assets'] = array(
+    'name' => t("Assets Path"),
+    'description' => t("Resolves to /sites/<site>/assets/"),
+  );
+  $path['assets_images'] = array(
+    'name' => t("Assets Path"),
+    'description' => t("Resolves to /sites/<site>/assets/images/"),
+  );
+  $path['url_shop'] = array(
+    'name' => t('The shop\'s URL'),
+    'description' => t('Provides the URL to the online shop'),
+  );
+  $path['url_rnfs'] = array(
+    'name' => t('RNFS Form'),
+    'description' => t('Red noses for schools - PDF'),
+  );
+  return array(
+    'types' => $types,
+    'tokens' => array(
+      'path' => $path,
+    ),
+  );
+}
+
+/**
+ * Implements hook_tokens(). This hook will operate the token and replace it with its value.
+ *
+ * Tokens should be added to content using their type prefix, Eg) [path:token_name]
+ */
+function cr_general_tokens($type, $tokens, array $data = array(), array $options = array()) {
+  $replacements = array();
+  $sanitize = !empty($options['sanitize']);
+  $shopPrefix = '';
+  $frostPrefix = '';
+  switch(APPLICATION_ENV) {
+    case 'production':
+      $shopPrefix = SHOP_PREFIX_PROD;
+      $frostPrefix = FROST_PROD;
+      $frostSrPrefix = FROST_SR_PROD;
+      break;
+    case 'qa':
+      $shopPrefix = SHOP_PREFIX_QA;
+      $frostPrefix = FROST_UAT;
+      $frostSrPrefix = FROST_SR_QA;
+      break;
+    case 'staging':
+      $shopPrefix = SHOP_PREFIX_QA;
+      $frostPrefix = FROST_UAT;
+      $frostSrPrefix = FROST_SR_UAT;
+      break;
+    case 'development':
+      $shopPrefix = SHOP_PREFIX_DEV;
+      // changed for review as frost dev missing
+      $frostPrefix = FROST_UAT;
+      $frostSrPrefix = FROST_SR_UAT;
+      break;
+    case 'local':
+      $shopPrefix = SHOP_PREFIX_DEV;
+      // changed for review, frost dev missing
+      $frostPrefix = FROST_UAT;
+      $frostSrPrefix = FROST_SR_UAT;
+      break;
+    default:
+      $shopPrefix = SHOP_PREFIX_DEV;
+      $frostPrefix = FROST_PROD;
+      $frostSrPrefix = FROST_SR_UAT;
+  }
+  if($type == 'path') {
+    foreach($tokens as $name => $original) {
+      switch($name) {
+        case 'theme_images':
+          $replacement_value = file_create_url(base_path() . drupal_get_path('theme', variable_get('theme_default', null))) . '/images/';
+          $replacements[$original] = $sanitize ? filter_xss($replacement_value) : $replacement_value;
+          break;
+        case 'theme':
+          $replacement_value = file_create_url(base_path() . drupal_get_path('theme', variable_get('theme_default', null))) . '/';
+          $replacements[$original] = $sanitize ? filter_xss($replacement_value) : $replacement_value;
+          break;
+        //From https://drupal.org/comment/6593364#comment-6593364
+        case 'theme_logo_url':
+          $replacements[$original] = theme_get_setting('logo');
+          break;
+        case 'library':
+          $replacement_value = file_create_url('/sites/all/libraries/');
+          $replacements[$original] = $sanitize ? filter_xss($replacement_value) : $replacement_value;
+          break;
+        case 'assets':
+          $replacement_value = conf_path() . '/assets/';
+          $replacements[$original] = $sanitize ? filter_xss($replacement_value) : $replacement_value;
+          break;
+        case 'assets_images':
+          $replacement_value = conf_path() . '/assets/images/';
+          $replacements[$original] = $sanitize ? filter_xss($replacement_value) : $replacement_value;
+          break;
+        case 'url_shop':
+          $replacements[$original] = $shopPrefix;
+          break;
+        case 'url_shop_fr_kit':
+          $replacements[$original] = $shopPrefix . 'QuickOrder.aspx?RecordType=1033';
+          break;
+        case 'url_shop_cat':
+          $replacements[$original] = $shopPrefix . 'Group.aspx?GroupId=42';
+          break;
+        case 'url_shop_public_home':
+          $replacements[$original] = $shopPrefix . 'Group.aspx?GroupId=43';
+          break;
+        case 'url_shop_pack':
+          $replacements[$original] = $shopPrefix . 'Group.aspx?GroupId=35#secondarypack';
+          break;
+        case 'url_shop_noses':
+          $replacements[$original] = $shopPrefix . 'Group.aspx?GroupId=35';
+          break;
+        case 'url_shop_early_years':
+          $replacements[$original] = $shopPrefix . 'QuickOrder.aspx?RecordType=1035';
+          break;
+        case 'url_shop_primary':
+          $replacements[$original] = $shopPrefix . 'QuickOrder.aspx?RecordType=1047';
+          break;
+        case 'url_shop_secondary':
+          $replacements[$original] = $shopPrefix . 'QuickOrder.aspx?RecordType=1113';
+          break;
+        case 'url_rnfs':
+          $replacements[$original] = 'sites/rednoseday.com/files/downloadables/rnd13_schools_shop_rnfs_order_form.pdf';
+          break;
+        case 'url_frost':
+          $replacements[$original] = $frostPrefix;
+          break;
+        case 'url_sr_frost':
+          $replacements[$original] = $frostSrPrefix;
+          break;
+        case 'url_frost_https':
+          $replacements[$original] = str_replace('http://', 'https://', $frostPrefix);
+          break;
+        case 'url_shop_red_nose':
+          $replacements[$original] = $shopPrefix . 'Category.aspx?CategoryId=69';
+          break;
+        case 'cdn':
+          $cdn_paths = explode("\n",trim(variable_get('cdn_basic_mapping')));
+          if(is_array($cdn_paths) && isset($cdn_paths[0])){
+            $cdn_path = $cdn_paths[0];
+          }else{
+            $cdn_path = $cdn_paths;
+          }
+          $replacements[$original] = check_url($cdn_path);
+          break;
+      }
+    }
+  }
+  return $replacements;
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function cr_general_block_info() {
+  $blocks = array();
+  $blocks['contact_form_block'] = array(
+    'info' => t('Contact form block'),
+  );
+
+  $blocks['share'] = array(
+    'info' => t('Share links for homepage'),
+  );
+
+  $blocks['cr_search'] = array(
+    'info' => t('Search form block'),
+  );
+
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_configure().
+ */
+function cr_general_block_configure($delta='') {
+  $form = array();
+
+  switch($delta) {
+    case 'contact_form_block' :
+      // Text field form element
+      $form['text_body'] = array(
+        '#type' => 'text_format',
+        '#title' => t('Enter your text here in WYSIWYG format'),
+        '#default_value' => variable_get('text_variable', ''),
+      );
+
+      // File selection form element
+      $form['file'] = array(
+        '#name' => 'block_image',
+        '#type' => 'managed_file',
+        '#title' => t('Choose an Image File'),
+        '#description' => t('Select an Image for the custom block.  Only *.gif, *.png, *.jpg, and *.jpeg images allowed.'),
+        '#default_value' => variable_get('block_image_fid', ''),
+        '#upload_location' => 'public://block_image/',
+        '#upload_validators' => array(
+          'file_validate_extensions' => array('gif png jpg jpeg zip'),
+        ),
+      );
+      break;
+  }
+  return $form;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function cr_general_block_view($delta='') {
+  $block = array();
+
+  switch($delta) {
+    case 'contact_form_block' :
+      $block['content'] = _get_contact_form();
+      break;
+    case 'share' :
+      $block['subject'] = t('Share this page');
+
+      $url = urlencode(url(current_path(), array('absolute' => TRUE)));
+      //if served inside colorbox, the colorbox path is included in the share link url so removing it
+      $url = str_replace('colorbox%2F', '', $url);
+     
+      $meta_og_title = "";
+
+
+      // If node panel page or node update meta descriptions provided by meta tag
+      if(arg(0) == 'node' && is_numeric(arg(1)) && !arg(2) ){
+
+        $node = menu_get_object();
+        // Determine if this is front page
+        if(drupal_is_front_page()){
+          $meta_og_title = token_replace('[site:name]');
+        } else {
+          $meta_og_title = token_replace('[current-page:title]',array('node'=>$node));
+        }
+
+
+
+        // Set met tag descriptions
+        if(isset($node->metatags['und']['description']['value']) && !empty($node->metatags['und']['description']['value'])){
+          $meta_og_description = $node->metatags['und']['description']['value'];
+        }
+
+        else if (token_replace('[node:body]', array('node'=>$node)) !== '[node:body]') {
+          $meta_og_description = strip_tags(token_replace('[node:body]', array('node'=>$node)));
+        }
+
+        else {
+          $meta_og_description = t('Sport Relief is coming on Friday 21st – Sunday 23rd March. Get involved and enter an event at the Sainsbury’s Sport Relief Games now.');
+        }
+
+        // Set image used in FB share
+        if ( token_replace('[node:field_image]', array('node'=>$node)) !== '[node:field_image]') {
+          $meta_og_image = strip_tags(token_replace('[node:field_image]', array('node'=>$node)));
+        }
+
+        else if (token_replace('[node:field_poster_file]', array('node'=>$node)) !== '[node:field_poster_file]') {
+          $meta_og_image = token_replace('[node:field_poster_file]', array('node'=>$node));
+        }
+
+        else {
+          $meta_og_image = url("sites/sportrelief.com/themes/sport_relief_2014/images/share400x400.jpg", array('absolute'=>TRUE));
+        }
+      }
+
+      // Quick cleanup
+      $meta_og_title = urlencode($meta_og_title);
+      $meta_og_description = urlencode($meta_og_description);
+
+      $twitter_text = $meta_og_title . ": ";
+
+      // Setup collection of variables to use in share links (with defaults)
+      $share = array(
+        'url' => (!empty($url) ? $url : urlencode('')),
+        'images' => (!empty($meta_og_image) ? $meta_og_image : ''),
+        'title' => (!empty($meta_og_title) ? str_replace('\'', '\\\'', $meta_og_title) : ''),
+        'description' => (!empty($meta_og_description) ? str_replace('\'', '\\\'', $meta_og_description) : ''),
+        'twitter_text' => str_replace('\'', '\\\'', $twitter_text)
+      );
+
+      // Setup facebook share link to ensure no broken variables are used
+      $facebook_onclick = 'window.open(\'http://www.facebook.com/sharer.php?s=100';
+      $facebook_onclick .= (isset($share['url']) ? '&p[url]=' . $share['url'] : '');
+      $facebook_onclick .= (isset($share['images']) ? '&p[images][0]=' . $share['images'] : '');
+      $facebook_onclick .= (isset($share['title']) ? '&p[title]=' . $share['title'] : '');
+      $facebook_onclick .= (isset($share['description']) ? '&p[summary]=' . $share['description'] : '');
+      $facebook_onclick .= '\',\'MyWindows\',\'width=626,height=436\');return false;';
+
+      $twitter = '<li><a href="#" onclick="window.open(\'http://twitter.com/home/?status=' . $share['twitter_text'] . ' ' . $share['url'] . '\',\'MyWindows\',\'width=626,height=436\');return false;"><span class="nav-social-sprite sprite-tweet"></span></a></li>';
+
+
+      $block['content'] = '<ul class="share-links"><li class="facebook">
+      <a href="#" onclick="' . $facebook_onclick . '"><span class="nav-social-sprite sprite-fb"></span></a></li>' . $twitter . '<li>
+      <a href="#" onclick="window.open(\'https://plus.google.com/share?url=' . $url . '\',\'MyWindows\',\'width=626,height=436\');return false;"><span class="nav-social-sprite sprite-google"></span></a></li></ul>';
+
+
+      // SRSITE-630 hide the share and comment links for kids   
+      if(arg(0) == 'node' && is_numeric(arg(1)) && !arg(2) ) {
+        $node = menu_get_object();  
+        if (isset($node->field_media_bar_section['und'][0])) {
+          foreach ($node->field_media_bar_section['und'][0] as $tid => $termvalue) {
+            if (('Fun and games') == taxonomy_term_load($termvalue)->name) {
+              $block['content'] = '<style> .pod--article__bottom-wrapper { display:none; }</style>';
+            }        
+          }    
+        }     
+      }
+      if ('/play-games' == url(current_path(), array('absolute' => FALSE))) {
+         $block['content'] = '<style>  .colorbox-container .pod--article__sharelinks, #block-cr-general-share { display:none; }</style>';
+      }
+      break;
+    case 'cr_search':
+      $block['content'] = cr_general_cr_search_block_form();
+      break;
+  }
+  return $block;
+}
+
+
+function _get_contact_form(){
+  if(!function_exists('contact_site_page')) {
+    require_once drupal_get_path('module', 'contact') .'/contact.pages.inc';
+    return drupal_render(drupal_get_form('contact_site_form'));
+  }
+}
+
+function cr_general_cr_search_block_form() {
+  $form = theme('cr_general_cr_search_block_form');
+  return $form;
+}
+
+/**
+ * Custom function to assemble renderable array for block content.
+ * Returns a renderable array with the block content.
+ * @return
+ *   returns a renderable array of block content.
+ */
+function contact_form_block_view() {
+  $block = array();
+
+  // Capture the image file path and form into HTML with attributes
+  $image_file = file_load(variable_get('block_image_fid', ''));
+  $image_path = '';
+
+  if (isset($image_file->uri)) {
+    $image_path = $image_file->uri;
+  }
+
+  $image = theme_image(array(
+    'path' => ($image_path),
+    'alt' => t('Image description here.'),
+    'title' => t('This is our block image.'),
+    'attributes' => array('class' => 'class_name'),
+  ));
+
+  // Capture WYSIWYG text from the variable
+  $text = variable_get('text_variable', '');
+
+  // Block output in HTML with div wrapper
+  $block = array(
+    'image' => array(
+      '#prefix' => '<div class="class_name">',
+      '#type' => 'markup',
+      '#markup' => $image,
+    ),
+    'message' => array(
+      '#type' => 'markup',
+      '#markup' => $text,
+      '#suffix' => '</div>',
+    ),
+  );
+
+  return $block;
+}
+
+function jon_val() {
+  return true;
+}
+
+function out($x) {
+  echo '<pre>' . print_r($x) . '</pre>';
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function cr_general_form_alter(&$form, &$form_state, $form_id) {
+
+  switch($form_id){
+    case 'contact_site_form':
+      // do some stuff
+      $form['name']['#weight'] = 1;
+      $form['mail']['#weight'] = 2;
+      $form['email_confirmation']['#weight'] = 3;
+      $form['cid']['#weight'] = 4;
+      $form['subject']['#weight'] = 5;
+      $form['message']['#weight'] = 6;
+      break;
+    case 'generic_page_node_form':
+      // out($form_state);
+      // echo array_search('http://www.yahoo.com', $form_state);
+      // exit;
+      // out($form_state);
+      break;
+    case 'downloadable_node_form':
+      // To allow for tokens
+      // unset($form['#validate'][0]);
+      break;
+  }
+
+  if ($form_id == "contact_site_form") {
+    $form['#validate'][] = 'cr_general_email_confirm_validate';
+  }
+
+  // Change -Any- exposed filter option to All
+  if(isset($form_state['view']) && $form_state['view']->name == 'ideas_and_tools') {
+    $form['field_hero_category_tid']['#options']['All'] = t('All');
+    $form['field_other_categories_tid']['#options']['All'] = t('All');
+  }
+
+}
+
+function cr_general_email_confirm_validate($form, &$form_state) {
+  if (isset($form_state['values']['field_email_confirmation']) && ($form_state['values']['mail'] != $form_state['values']['field_email_confirmation'])) {
+    form_set_error('mail', 'Your email addresses do not match, please check and resubmit');
+  }
+}
+
+/**
+* Implements hook_form_contact_site_form_alter().
+* This function will add an Email Confirmation field to the site-wide contact form,
+* by implementing hook_form_FORM_ID_alter().
+*/
+function cr_general_form_contact_site_form_alter(&$form, &$form_state, $form_id) {
+  // Remove Send Copy To Self field
+  $form['copy']['#disabled'] = TRUE;
+  $form['copy']['#access'] = FALSE;
+
+  // Add an Email Confirmation field to the contact form.
+  $form['email_confirmation'] = array(
+  '#type' => 'textfield',
+  '#maxlength' => 60,
+  '#title' => t('Confirm your e-mail address'),
+  '#required' => true,
+  );
+
+  // Define the order of the top level elements on the form (include those from contact_site_form().
+  $order = array('name', 'mail', 'email_confirmation', 'cid', 'subject', 'message', 'copy', 'actions');
+
+  // Order the elements by changing their #weight property.
+  foreach($order as $key => $field) {
+    $form[$field]['#weight'] = $key;
+  }
+}
+
+function cr_general_preprocess_node(&$vars) {
+  $vars['theme_hook_suggestion'] = 'node__' . $vars['type'] . '__' . $vars['view_mode'];
+  /*
+  // Perform token replacement on "downloadable" content type CTA URL
+  if($vars['type'] == 'downloadable') {
+    // dsm('whaat');
+    $url = $vars['field_link_to'][0]['url'];
+    $vars['field_link_to'][0]['url'] = token_replace($url);
+  }
+  */
+}
+
+/**
+ * Custom function to check if cta 'http' links should open in new tabs
+ *
+ * @param $url
+ *   A valid url
+ *
+ * @return string
+ *   1 or 0
+ */
+function _cr_general_check_cta_domain($url = NULL){
+    $blacklist = variable_get('cr_general_cta_blacklist', array('nexdox.com'));
+    $valid = 0;
+    if(valid_url($url, TRUE)){
+      $domain = str_ireplace('www.', '', parse_url($url, PHP_URL_HOST));
+
+      if( in_array($domain, $blacklist) ){
+        $valid = 1;
+      }
+      else{
+        $valid =  0;
+      }
+    }
+
+    return $valid;
+}
+
+/**
+ * Implements hook_element_info().
+ */
+function cr_general_element_info() {
+  $type['cr_partner_organisation'] = array(
+    '#input' => TRUE,
+    '#skip_validation' => FALSE,
+    '#process' => array('cr_general_partner_organisation_element_process'),
+    '#element_validate' => array('cr_general_partner_organisation_element_validate'),
+    '#theme_wrappers' => array('form_element'),
+  );
+
+  return $type;
+}
+
+/**
+ * Process callback for the partner organisation element.
+ */
+function cr_general_partner_organisation_element_process($element, $form_state = array(), $complete_form = array()) {
+  $element['organisation_name'] = array(
+    '#type' => 'select',
+    '#title' => t('Select your organisation'),
+    '#description' => $element['#description'],
+    '#options' => cr_general_partner_organisations(),
+  );
+  unset($element['#description']);
+
+  // Wrapper containers allow inline form errors to be hidden correctly.
+  $element['organisation_other'] = array(
+    '#type' => 'container',
+    '#states' => array(
+      'visible' => array(
+        ':input[name="organisation_name"]' => array('value' => 'Other'),
+      ),
+    ),
+  );
+  $element['organisation_other']['organisation_other'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Organisation name') . ' ' . theme('form_required_marker'),
+    '#title_display' => 'invisible',
+    '#placeholder' => t('Organisation name'),
+    '#maxlength' => 100,
+  );
+
+  $element['organisation_group'] = array(
+    '#type' => 'container',
+    '#states' => array(
+      'visible' => array(
+        ':input[name="organisation_name"]' => array(
+          array('value' => 'Air Cadets'),
+          array('value' => 'GirlGuiding UK'),
+          array('value' => 'Sea Cadets'),
+        ),
+      ),
+    ),
+  );
+  $element['organisation_group']['organisation_group'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Group name') . ' ' . theme('form_required_marker'),
+    '#title_display' => 'invisible',
+    '#placeholder' => t('Please enter your group name'),
+    '#maxlength' => 80,
+  );
+
+  if (!empty($element['#default_value'])) {
+    $value = $element['#default_value'];
+    if ($pos = strpos($value, '|')) {
+      $element['organisation_name']['#default_value'] = substr($value, 0, $pos);
+      $element['organisation_group']['organisation_group']['#default_value'] = substr($value, $pos + 1);
+    }
+    elseif (isset($element['organisation_name']['#options'][$value])) {
+      $element['organisation_name']['#default_value'] = $value;
+    }
+    else {
+      $element['organisation_name']['#default_value'] = 'Other';
+      $element['organisation_other']['organisation_other']['#default_value'] = $value;
+    }
+  }
+
+  return $element;
+}
+
+/**
+ * Validation callback for the partner organisation element.
+ */
+function cr_general_partner_organisation_element_validate($element, &$element_state) {
+  if (empty($element['#skip_validation'])) {
+    if ($element['organisation_name']['#value'] == 'Other' && empty($element['organisation_other']['organisation_other']['#value'])) {
+      form_error($element['organisation_other']['organisation_other'], t('Please fill in your organisation'));
+    }
+
+    $groups = array('Air Cadets', 'GirlGuiding UK', 'Sea Cadets');
+    if (in_array($element['organisation_name']['#value'], $groups) && empty($element['organisation_group']['organisation_group']['#value'])) {
+      form_error($element['organisation_group']['organisation_group'], t('Please fill in your group name'));
+    }
+  }
+
+  return $element;
+}
+
+/**
+ * Returns a map of partner organisations.
+ */
+function cr_general_partner_organisations() {
+  return drupal_map_assoc(array(
+    'Other',
+    'Air Cadets',
+    'Amazon',
+    'BBC',
+    'British Airways',
+    'BT',
+    'Cisco',
+    "Claire's",
+    'Disney',
+    'Ernst & Young',
+    'Emma Bridgewater',
+    'GirlGuiding UK',
+    'Hewlett Packard',
+    'Jackpot Joy',
+    'Kia',
+    'Mars',
+    'Menu Relief',
+    'Mini Babybel',
+    'Oracle',
+    'Oxfam',
+    'PayPal',
+    'PEZ',
+    'Premiership Rugby',
+    'RBS',
+    'Robert Dyas',
+    'Ryman',
+    "Sainsbury's",
+    'Sea Cadets',
+    'TJX Europe',
+    'Tragus',
+    'WorldPay',
+  ));
+}
+
+function cr_general_views_pre_render(&$view) {
+  /* If schools toolbox has a video then dont display the image */
+  if ($view->name == 'schools_toolbox'){
+    $count = count($view->result);
+    for($i=0; $i < $count; $i++) {
+      if(isset($view->result[$i]->field_field_video) && $view->result[$i]->field_field_video != NULL) {
+        unset($view->result[$i]->field_field_image[0]['rendered']);
+      }
+    }
+  }
+}
+
+/* Set colorbox transition time to 0 so there isnt an awful jerky mess */
+function cr_general_colorbox_settings_alter(&$settings, &$style) {
+  $settings['speed'] = 0;
+}
+
+/**
+ * Implements hook_metatag_metatags_view_alter().
+ *
+ * Alters the og:image metatag to have an absolute URL, as protocol-relative
+ * URLs do not work with Facebook.
+ */
+function cr_general_metatag_metatags_view_alter(&$output, $instance) {
+  if (isset($output['og:image']['#attached']['drupal_add_html_head'][0][0]['#value'])) {
+    $url = $output['og:image']['#attached']['drupal_add_html_head'][0][0]['#value'];
+    if (substr($url, 0, 2) == '//') {
+      // Reformat URL as external.
+      $output['og:image']['#attached']['drupal_add_html_head'][0][0]['#value'] = 'http:' . $url;
+    }
+  }
+}
+
+/*
+ * Implements hook_theme()
+ */
+function cr_general_theme() {
+  return array(
+    'cr_general_cr_search_block_form' => array(
+      'template' => 'cr_search_block_form',
+    ),
+    'cr_general_callback_content_wrapper' => array(
+      'render element' => 'element',
+      'template' => 'cr_general_callback_content_wrapper',
+    ),
+  );
+}

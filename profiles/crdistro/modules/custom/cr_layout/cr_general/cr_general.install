@@ -1,0 +1,66 @@
+<?php
+
+/**
+ * Implementation of hook_requirements.
+ */
+function cr_general_requirements($phase) {
+  if ($phase == 'runtime') {
+    $items['cr_environment'] = array(
+      'title' => 'Comic Relief environment',
+      'value' => APPLICATION_ENV . ' (' . AH_SITE_ENVIRONMENT . ')',
+    );
+
+    return $items;
+  }
+}
+
+
+/**
+ * Removes the last remenants of field_public_libraries collection
+ * See unfuddle: 746
+ */
+function cr_general_update_7001() {
+  db_delete('field_collection_item')->condition('field_name', 'field_public_libraries')->execute();
+  db_delete('field_config')->condition('field_name', 'field_public_libraries')->execute();
+  db_delete('field_config_instance')->condition('field_name', 'field_public_libraries')->execute();
+}
+
+/**
+ * Creates a default blacklist for _cr_general_check_cta_domain to
+ * check if cta links are eligible for new tabs or not
+ */
+function cr_general_update_7002() {
+
+  // Blacklist of domains that should bypass the requirement of 'open in new tab'
+  // if 'http' is prepended to cta urls
+
+  $blacklist = array(
+        'nexdox.com',
+        'beta.nexdox.com',
+  );
+
+  // Set array of blacklisted domains in variable table
+  variable_set('cr_general_cta_blacklist',$blacklist);
+
+  $ret[] = array('success' => TRUE, 'query' => 'Added default blacklisted domains.');
+
+  return $ret;
+
+}
+
+/**
+ * Updating blacklist with shop URLs
+ */
+function cr_general_update_7003() {
+  // Blacklist of domains that should bypass the requirement of 'open in new tab'
+  // if 'http' is prepended to cta urls
+  $blacklist = array(
+        'nexdox.com',
+        'shop.rednoseday.com',
+        'beta.nexdox.com',
+  );
+  // Set array of blacklisted domains in variable table
+  variable_set('cr_general_cta_blacklist',$blacklist);
+  $ret[] = array('success' => TRUE, 'query' => 'Added default blacklisted domains.');
+  return $ret;
+}

@@ -1,0 +1,339 @@
+<?php
+/**
+ * @file
+ * Contains core functions for the CR Page manager search module.
+ */
+define('CR_PAGE_MANAGER_SEARCH_ENTITY_TYPE', 'page_manager_search');
+/**
+ * Include additional files.
+ */
+$dirname = dirname(__FILE__);
+$includes = file_scan_directory("{$dirname}/includes", '/.inc$/');
+foreach (module_list() as $module) {
+  if (isset($includes[$file = "{$dirname}/includes/{$module}.inc"])) {
+    require_once $file;
+  }
+}
+
+/**
+ * Pseudo entity not using a base table which breaks pid generation below
+ * when entities are loaded from it
+ * Implements hook_entity_info().
+ */
+function cr_page_manager_search_entity_info() {
+  $info = array();
+  $info[CR_PAGE_MANAGER_SEARCH_ENTITY_TYPE] = array(
+    'label' => t('Page manager page'),
+    'controller class' => 'CRPageManagerSearchEntityController',
+    'uri callback' => 'cr_page_manager_search_uri',
+    'entity keys' => array(
+      'id' => 'pid',
+    ),
+  );
+  return $info;
+}
+
+/**
+ * URI callback for Page manager search entity.
+ */
+function cr_page_manager_search_uri($ids) {
+  foreach ($ids as $id) {
+    $page = cr_page_manager_search_get_pages_by_dec($id);
+
+    return array(
+      'path' => $page->path,
+      'options' => array(),
+    );
+  }
+}
+
+/**
+ * Helper function; Convert Page manager page machine name to a decimal
+ * conversion of the MD5 hash.
+ */
+function cr_page_manager_search_machine_name_to_dec($machine_name, $length = 10) {
+  // As not every subtask has a PID we need to convert the subtask id to a
+  // decimal representation. I'm uncertain of whether the truncated decimal
+  // conversion of an MD5 hash is unique enough, but I have limited
+  // alternatives.
+  $md5 = md5($machine_name);
+  $dec = base_convert($md5, 16, 10);
+  return drupal_substr($dec, 0, $length);
+}
+
+/**
+ * Should switch nullable value to right
+ * Helper function; Get Page manager page(s) by decimal conversion of MD5 hash.
+ */
+function cr_page_manager_search_get_pages_by_dec($dec = NULL, $length = 10) {
+  $items = &drupal_static('__FUNCTION__');
+
+  // Build list of SIDs.
+  if (empty($items)) {
+    ctools_include('export');
+    $pages = ctools_export_crud_load_all('page_manager_pages');
+    foreach ($pages as $subtask_id => $subtask) {
+      $subtask->did = $subtask->pid;
+      $subtask->subtaskname = $subtask_id;
+      $sid = cr_page_manager_search_machine_name_to_dec($subtask_id, $length);
+      $items[$sid] = $subtask;
+    }
+  }
+  return !is_null($dec) && isset($items[$dec]) ? $items[$dec] : $items;
+}
+
+/**
+ * Add exclusion functionality to the page manager variants edit form
+ * Implements hook_form_FORM_ID_alter
+ */
+function cr_page_manager_search_form_panels_panel_context_edit_settings_alter(&$form, &$form_state) {
+  $handler = $form_state['handler'];
+  $form['conf']['search_exclude'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Exclude from the search.'),
+    '#description' => t('Check this to exclude the page from the search'),
+    '#default_value' => isset($handler->conf['search_exclude']) ? $handler->conf['search_exclude'] : FALSE,
+    '#weight' => 1,
+  );
+
+  $form['#submit'][]= 'cr_page_manager_search_panel_context_edit_settings_submit';
+}
+
+/**
+ * Search submit handler for storing search exclusion setting.
+ */
+function cr_page_manager_search_panel_context_edit_settings_submit(&$form, &$form_state) {
+  $form_state['handler']->conf['search_exclude'] = $form_state['values']['search_exclude'];
+}
+
+/**
+ * Implements hook_search_api_alter_callback_info()
+ * @return mixed - data alteration configuration
+ */
+function cr_page_manager_search_search_api_alter_callback_info() {
+  $callbacks['cr_page_manager_search_api_exclude_item_alter'] = array(
+    'name' => t('Page manager page exclusion'),
+    'description' => t('Exclude selected page manager pages'),
+    'class' => 'CRPageManagerSearchApiExcludeItem',
+  );
+
+  return $callbacks;
+}
+
+/**
+ * Data alteration class
+ *
+ * Class CRPageManagerSearchApiExcludeItem
+ * Implements SearchApiAlterCallbackInterface
+ */
+class CRPageManagerSearchApiExcludeItem extends SearchApiAbstractAlterCallback {
+
+  /**
+   * Function to perform the data alteration prior to indexing
+   * @param array $items
+   */
+  public function alterItems(array &$items) {
+    // Prevents data alteration affecting indexes for incompatible entity types
+    if ($this->index->item_type !== CR_PAGE_MANAGER_SEARCH_ENTITY_TYPE) {
+      return;
+    }
+
+    foreach ($items as $key => $item) {
+      $subtask = cr_page_manager_search_get_pages_by_dec($item->pid);
+      $contexts = page_manager_load_task_handlers(array('name'=> 'page'), $subtask->subtaskname);
+
+      foreach($contexts as $handler_key => $context) {
+        if($context->did !== $subtask->pid) {
+          continue;
+        }
+
+        $conf = $context->conf;
+
+        // Remove excluded items from the list of those about to be to indexed
+        if (isset($conf['search_exclude']) && $conf['search_exclude'] == 1) {
+          unset($items[$key]);
+          break;
+        }
+      }
+    }
+  }
+
+  /**
+   * Prevent the alteration being applied to incompatible indexes
+   * @param SearchApiIndex $index
+   * @return bool
+   */
+  public function supportsIndex(SearchApiIndex $index) {
+    if ($index->getEntityType() === CR_PAGE_MANAGER_SEARCH_ENTITY_TYPE) {
+      return TRUE;
+    }
+
+    return FALSE;
+  }
+}
+
+/**
+ * Implements hook_views_api()
+ */
+function cr_page_manager_search_views_api() {
+  return array(
+    'api' => 3,
+  );
+}
+
+/**
+ * Provides field mappings to additional indexed content
+ * @return array
+ */
+function cr_page_manager_search_get_field_map(){
+  // map fields to search_downloadable shop_product video
+  return array(
+    'news_article' => array(
+      'ss_description' => 'body:summary',
+    ),
+    'search_downloadable' => array(
+      'ss_search_result_url' => 'field_search_dl_url_token',
+    ),
+    'shop_product' => array(
+      'ss_search_result_url' => 'field_shop_url',
+    ),
+    'video' => array(),
+  );
+}
+
+/**
+ * Retrieves all fields from solr rather than just (id, index_id, score)
+ * Implements hook_search_api_solr_multi_query_alter().
+ */
+function cr_page_manager_search_search_api_solr_multi_query_alter(array &$call_args, SearchApiMultiQueryInterface $query) {
+  if ($query->getServer()->options['retrieve_data']) {
+    $call_args['params']['fl'] = '*,score';
+  }
+}
+
+/**
+ * Modify the solr results as default multi-index search tries to strip
+ * results to a restricted set of fields (id, index_id, score)
+ *
+ * Implements hook_search_api_solr_multi_search_results_alter()
+ * @param $results solr query results
+ * @param $query solr query
+ * @param $response solr search response
+ */
+function cr_page_manager_search_search_api_solr_multi_search_results_alter(array &$results, &$query, &$response) {
+  foreach ($response->response->docs as $id => $doc) {
+    if ($query->getServer()->options['retrieve_data']) {
+      $result = (array)$doc;
+      $result['id'] = $doc->item_id;
+    }
+    $results['results'][$id] = array_merge($results['results'][$id], $result);
+  }
+}
+
+/**
+ * Implements hook_views_plugins_alter()
+ */
+function cr_page_manager_search_views_plugins_alter(&$plugins) {
+  $plugins['query']['search_api_multi_query']['handler'] = 'CRSearchApiMultiViewsQuery';
+  $query_plugin = &$plugins['query']['search_api_multi_query'];
+  $query_plugin['module'] = 'cr_page_manager_search';
+  $query_plugin['path'] = drupal_get_path('module', 'cr_page_manager_search');
+  $query_plugin['theme path'] = drupal_get_path('module', 'cr_page_manager_search');
+  $query_plugin['file'] = 'CRPageManagerSearchViewsQuery.inc';
+  $query_plugin['name'] = 'search_api_multi_query';
+}
+
+/**
+ * Alter Solr default_node_index documents with additional fields
+ * before they are sent to Solr
+ *
+ * Implements hook_search_api_solr_documents_alter()
+ *
+ * @param array $documents
+ *   An array of SearchApiSolrDocument objects ready to be indexed, generated
+ *   from $items array.
+ * @param SearchApiIndex $index
+ *   The search index for which items are being indexed.
+ * @param array $items
+ *   An array of items being indexed.
+ */
+function cr_page_manager_search_search_api_solr_documents_alter(array &$documents, SearchApiIndex $index, array &$items) {
+  if ($index->getEntityType() !== 'node') {
+    return;
+  }
+
+  $supported_bundles = array('news_article', 'search_downloadable', 'shop_product', 'video');
+  $maps = cr_page_manager_search_get_field_map();
+
+  foreach ($documents as $id => $document) {
+    $entity_id = $document->getField('is_nid')['value'];
+    $type = $document->getField('ss_type')['value'];
+
+    if (!in_array($type, $supported_bundles)) {
+      continue;
+    }
+
+    // Default fields to be updated with search-retrieved values
+    $fields = array(
+      'ss_title' => 'title',
+      'ss_description' => 'body',
+      'ss_search_result_url' => 'url'
+    );
+
+    $overridden_fields = isset($maps[$type]) ? $maps[$type] : array();
+    if (!empty($overridden_fields) && is_array($overridden_fields)) {
+      $fields = array_merge($fields, $overridden_fields);
+    }
+
+    $wrapper = entity_metadata_wrapper('node', $entity_id);
+
+    foreach ($fields as $key => $field) {
+      if ($field === 'title') {
+        $field_content = $wrapper->label();
+        $documents[$id]->setField($key, $field_content);
+        continue;
+      }
+      if (strpos($field, ':') === FALSE) {
+        $field_output = $wrapper->{$field}->value(array('sanitized'));
+
+        if (!empty($field_output['value'])) {
+          $field_content = $field_output['value'];
+        } else {
+          $field_content = $field_output;
+        }
+        $documents[$id]->setField($key, $field_content);
+      } else {
+        $parts = explode(':', $field);
+        $field_content = $wrapper->{$parts[0]}->{$parts[1]}->value();
+        $documents[$id]->setField($key, $field_content);
+      }
+    }
+  }
+}
+
+/**
+ * Prevents error thrown by search_api_indexes based on the entity
+ * defined by this module (when checking their status on cache clear)
+ * Implements hook_disable().
+ */
+function cr_page_manager_search_disable() {
+  // Remove indexes for the entity
+  $tasks = array();
+  foreach (search_api_index_load_multiple(FALSE, array('item_type' => CR_PAGE_MANAGER_SEARCH_ENTITY_TYPE)) as $index) {
+    $server = search_api_server_load($index->server);
+    $index->dequeueItems();
+    $index->delete();
+
+    $idx = new SearchApiIndex();
+    $idx->dequeueItems();
+    $idx->delete();
+
+    if (empty($index->read_only)) {
+      $tasks = variable_get('search_api_tasks', array());
+      $tasks[$server->machine_name][$index->machine_name] = array('remove');
+    }
+  }
+  if (!empty($tasks)) {
+    variable_set('search_api_tasks', $tasks);
+  }
+}

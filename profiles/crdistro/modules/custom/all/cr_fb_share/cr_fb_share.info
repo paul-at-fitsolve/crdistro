@@ -1,0 +1,5 @@
+name = Facebook Share Dialog
+description = General module to allow placement of f]Facebook share links in content
+core = 7.x
+package = "Comic Relief"
+version = "7.x-1.0"

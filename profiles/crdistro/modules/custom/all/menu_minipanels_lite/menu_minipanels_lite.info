@@ -1,0 +1,9 @@
+name = Menu Minipanels Lite
+description = Link a menu item to a mini panel
+core = 7.x
+package = "Comic Relief"
+package = "Menu"
+dependencies[] = menu
+dependencies[] = panels_mini
+
+

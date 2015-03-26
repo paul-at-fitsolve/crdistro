@@ -1,0 +1,7 @@
+name = CRL2 SVG Field
+description = Provides a SVG field formatter for file fields.
+core = 7.x
+package = CR Layout V2
+version = 7.x-0.02
+dependencies[] = file
+scripts[] = js/crl2_svg_field.min.js

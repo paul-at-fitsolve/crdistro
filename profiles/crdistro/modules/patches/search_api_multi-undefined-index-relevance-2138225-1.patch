@@ -1,0 +1,13 @@
+Index: search_api_multi/views/search_api_multi.views.inc
+===================================================================
+--- search_api_multi/views/search_api_multi.views.inc
++++ search_api_multi/views/search_api_multi.views.inc
+@@ -101,7 +101,7 @@
+     $table['search_api_relevance']['group'] = t('Search');
+     $table['search_api_relevance']['title'] = t('Relevance');
+     $table['search_api_relevance']['help'] = t('The relevance of this search result with respect to the query.');
+-    $table['search_api_relevance']['type'] = 'decimal';
++    $table['search_api_relevance']['field']['type'] = 'decimal';
+     $table['search_api_relevance']['field']['handler'] = 'entity_views_handler_field_numeric';
+     $table['search_api_relevance']['field']['click sortable'] = TRUE;
+     $table['search_api_relevance']['sort']['handler'] = 'SearchApiViewsHandlerSort';

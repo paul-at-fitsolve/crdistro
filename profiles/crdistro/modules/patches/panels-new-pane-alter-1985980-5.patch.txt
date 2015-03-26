@@ -1,0 +1,24 @@
+From 029e305cc25fef6401a99716b177742911d4338c Mon Sep 17 00:00:00 2001
+From: Rahul Bile <rahul.rmcet@gmail.com>
+Date: Fri, 21 Mar 2014 12:01:46 +0530
+Subject: [PATCH] Allow altering of new panes
+
+---
+ panels.module |    1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/panels.module b/panels.module
+index 4bb3bad..3b59983 100644
+--- a/panels.module
++++ b/panels.module
+@@ -788,6 +788,7 @@ function panels_new_pane($type, $subtype, $set_defaults = FALSE) {
+     $content_subtype = ctools_content_get_subtype($content_type, $subtype);
+     $pane->configuration = ctools_content_get_defaults($content_type, $content_subtype);
+   }
++  drupal_alter('panels_new_pane', $pane);
+ 
+   return $pane;
+ }
+-- 
+1.7.10.4
+

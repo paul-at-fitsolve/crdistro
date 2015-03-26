@@ -1,0 +1,370 @@
+<?php
+
+define('CR_EDDIRECT_USERNAME', 'comic');
+define('CR_EDDIRECT_PASSWORD', 'BUspuc63buZu');
+define('CR_EDDIRECT_TYPE_FILTER', 'BA,BM,BP,BS,DN,I6,IA,IB,IC,IE,IF,IJ,IN,IP,IS,IT,JH,JN,LE,MP,MS,PF,PI,PJ,PP,PS,S6,S8,SG,SH,SL,SN,SP,SR,ST,SU,BN,CM,NM,PN,PT,PU,U1');
+
+/**
+ * Implements hook_menu().
+ */
+function cr_eddirect_menu() {
+  $items['eddirect/autocomplete'] = array(
+    'page callback' => 'cr_eddirect_autocomplete',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+/**
+ * Implements of hook_theme()
+ */
+function cr_eddirect_theme() {
+  return array(
+    'cr_eddirect_establishment' => array(
+      'render element' => 'form',
+      'template' => 'cr-eddirect-establishment',
+    ),
+    'webform_display_cr_eddirect_address' => array(
+      'render element' => 'element',
+      'file' => 'webform_components/eddirect.inc',
+    ),
+  );
+}
+
+/**
+ * Autocomplete callback: educational establishment lookup by name or postcode.
+ */
+function cr_eddirect_autocomplete($string = '') {
+  $edDirect = new EdDirect();
+  $matches = array();
+
+  if ($string) {
+    $cache = cache_get('cr_eddirect_autocomplete:' . $string);
+
+    if (!$cache || REQUEST_TIME > $cache->expire) {
+      $regex = '/
+                ^(([A-Z]{1,2})      # one or two letters
+                ([0-9]{1,2}[A-Z]?)) # one or two numbers, optional
+                \s?                 # space, optional
+                (([0-9]{1})         # one number
+                ([A-Z]{1,2})?)      # one or two letters, optional
+                ?$
+                /ix';
+      if (preg_match($regex, $string)) {
+        $result = $edDirect->search('postcode', $string);
+      }
+      else {
+        $result = $edDirect->search('name', $string);
+      }
+
+      if (is_array($result)) {
+        $result = array_slice($result, 0, 10);
+        foreach ($result as $school) {
+          $title = $school->Name . ', ' . rtrim(ucwords(strtolower($school->Address->Town))) . ', ' . $school->Address->Postcode;
+          $label = $title . ' [ID: ' . $school->ID . ']';
+          $matches[$label] = check_plain($title);
+        }
+      }
+
+      cache_set('cr_eddirect_autocomplete:' . $string, $matches);
+    }
+    else {
+      $matches = $cache->data;
+    }
+  }
+
+  drupal_json_output($matches);
+}
+
+/**
+ * Implements hook_default_wsclient_service().
+ */
+function cr_eddirect_default_wsclient_service() {
+  $service = new WSClientServiceDescription();
+  $service->name = 'eddirect_auth';
+  $service->label = 'edDirect authentication service';
+  $service->url = 'http://webapi.education.co.uk/webservices/spiritdataservice/ServiceAdmin.asmx?WSDL';
+  $service->type = 'soap';
+  try {
+    $service->endpoint()->initializeMetaData();
+    $services[$service->name] = $service;
+  }
+  catch (WSClientException $e) {
+    watchdog('wsclient', $e->__toString());
+  }
+
+  $service = new WSClientServiceDescription();
+  $service->name = 'eddirect';
+  $service->label = 'edDirect establishment lookup service';
+  $service->url = 'http://webapi.education.co.uk/webservices/spiritdataservice/EstablishmentProvider.asmx?WSDL';
+  $service->type = 'soap';
+  try {
+    $service->endpoint()->initializeMetaData();
+    $services[$service->name] = $service;
+  }
+  catch (WSClientException $e) {
+    watchdog('wsclient', $e->__toString());
+  }
+
+  return $services;
+}
+
+/**
+ * Implements hook_element_info().
+ */
+function cr_eddirect_element_info() {
+  $type['cr_eddirect_establishment'] = array(
+    '#input' => TRUE,
+    '#skip_validation' => FALSE,
+    '#process' => array('cr_eddirect_establishment_element_process'),
+    // commenting out validate funciton as we want to call this manually from the containing forms validation
+    // function as this element is not always visible, and thus should not always be validated
+    //'#element_validate' => array('cr_eddirect_establishment_element_validate'),
+    '#theme' => 'cr_eddirect_establishment',
+    '#theme_wrappers' => array('form_element'),
+  );
+
+  $type['cr_eddirect_area_job'] = array(
+    '#input' => TRUE,
+    '#process' => array('cr_eddirect_area_job_element_process'),
+    // commenting out validate funciton as we want to call this manually from the containing forms validation
+    // function as this element is not always visible, and thus should not always be validated
+    //'#element_validate' => array('cr_eddirect_area_job_element_validate'),
+    '#theme_wrappers' => array('form_element'),
+  );
+
+  return $type;
+}
+
+/**
+ * Process callback for the edDirect element.
+ */
+function cr_eddirect_establishment_element_process($element, $form_state = array(), $complete_form = array()) {
+  $address = isset($element['#default_value']['address']) ? $element['#default_value']['address'] : array();
+
+  $element['#attached']['js'][] = drupal_get_path('module', 'cr_eddirect') . '/cr_eddirect.js';
+
+  $element['establishment_lookup'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Where you work') . ' ' . theme('form_required_marker'),
+    '#placeholder' => t('Type in the postcode or name of your school/early years group.'),
+    '#description' => t('Type in the postcode or name of your school/early years group to start searching. This may take a few seconds.') .
+      ' <a href="#" class="establishment-manual">' . t("Alternatively, you can enter your address manually.") . '</a>',
+    '#autocomplete_path' => 'eddirect/autocomplete',
+    '#attributes' => array('id' => 'establishment_lookup'),
+  );
+  $element['establishment_id'] = array(
+    '#type' => 'hidden',
+    '#attributes' => array('id' => 'establishment_id'),
+    '#default_value' => isset($element['#default_value']['id']) ? $element['#default_value']['id'] : '',
+  );
+
+  $element['establishment_address_container'] = array(
+    '#type' => 'container',
+    '#tree' => TRUE,
+    '#attributes' => array('id' => 'manual-address-fields-container'),
+  );
+  $element['establishment_address_container']['schoolName'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Establishment name') . ' ' . theme('form_required_marker'),
+    '#default_value' => isset($address['schoolName']) ? $address['schoolName'] : '',
+    '#maxlength' => 100,
+    '#attributes' => array('id' => 'establishment_schoolname'),
+  );
+  $element['establishment_address_container']['address1'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Address line 1') . ' ' . theme('form_required_marker'),
+    '#default_value' => isset($address['address1']) ? $address['address1'] : '',
+    '#maxlength' => 100,
+    '#attributes' => array('id' => 'establishment_address1'),
+  );
+  $element['establishment_address_container']['address2'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Address line 2'),
+    '#default_value' => isset($address['address2']) ? $address['address2'] : '',
+    '#maxlength' => 100,
+    '#attributes' => array('id' => 'establishment_address2'),
+  );
+  $element['establishment_address_container']['address3'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Address line 3'),
+    '#default_value' => isset($address['address3']) ? $address['address3'] : '',
+    '#maxlength' => 100,
+    '#attributes' => array('id' => 'establishment_address3'),
+  );
+  $element['establishment_address_container']['town'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Town/City') . ' ' . theme('form_required_marker'),
+    '#default_value' => isset($address['town']) ? $address['town'] : '',
+    '#maxlength' => 50,
+    '#attributes' => array('id' => 'establishment_town'),
+  );
+  $element['establishment_address_container']['postcode'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Postcode') . ' ' . theme('form_required_marker'),
+    '#default_value' => isset($address['postcode']) ? $address['postcode'] : '',
+    '#maxlength' => 15,
+    '#attributes' => array('id' => 'establishment_postcode'),
+  );
+
+  // add in a hidden field when this element is being used in a webform,
+  // useful for identifying the component without making assumptions about field keys
+  // Also enable validation when used as a webform component
+  if (strpos($complete_form['#form_id'], 'webform_client_form_') === 0) {
+    $element['eddirect_flag'] = array(
+      '#type' => 'value',
+      '#value'  => '1',
+    );
+
+    $element['#element_validate'] = array('cr_eddirect_establishment_element_validate');
+  }
+
+  return $element;
+}
+
+/**
+ * Validation callback for the edDirect element.
+ */
+function cr_eddirect_establishment_element_validate($element, &$element_state) {
+  if (empty($element['establishment_id']['#value'])) {
+    $schoolName = &$element['establishment_address_container']['schoolName'];
+    if (empty($schoolName['#value'])) {
+      form_error($schoolName, t('Please fill in your establishment name'));
+    }
+    $address1 = &$element['establishment_address_container']['address1'];
+    if (empty($address1['#value'])) {
+      form_error($address1, t('Please fill in your address'));
+    }
+    $town = &$element['establishment_address_container']['town'];
+    if (empty($town['#value'])) {
+      form_error($town, t('Please fill in your town/city'));
+    }
+    $postcode = &$element['establishment_address_container']['postcode'];
+    if (empty($postcode['#value'])) {
+      form_error($postcode, t('Please fill in your post code'));
+    }
+  }
+
+  return $element;
+}
+
+/**
+ * Process callback for the school area/job element.
+ */
+function cr_eddirect_area_job_element_process($element, $form_state = array(), $complete_form = array()) {
+  $element['job_title'] = array(
+    '#type' => 'select',
+    '#title' => t('Job title') . ' ' . theme('form_required_marker'),
+    '#options' => drupal_map_assoc(array(
+        "Administrative Staff",
+        "Head Teacher",
+        "Assistant Head",
+        "Charity Coordinator",
+        "Head of Department",
+        "PE Coordinator",
+        "PSHE Coordinator",
+        "Manager",
+        "Teacher",
+        "Childminder",
+        "Support Staff",
+        "Early Years Practitioner",
+        "Other",
+        "Head of Year",
+        "Deputy head",
+        "Manager",
+        "Student",
+        "SEN Department",
+        "PE department",
+        "Youth group leader",
+        "Business management",
+    )),
+  );
+
+  // Wrapper containers allow inline form errors to be hidden correctly.
+  $element['job_title_other'] = array(
+    '#type' => 'container',
+    '#states' => array(
+      'visible' => array(
+        array(
+          ':input[name="job_title"]' => array('value' => 'Other'),
+        ),
+      ),
+    ),
+  );
+  $element['job_title_other']['job_title_other'] = array(
+    '#type' => 'textfield',
+    '#maxlength' => 100,
+  );
+
+  return $element;
+}
+
+/**
+ * Validation callback for the school area/job element.
+ */
+function cr_eddirect_area_job_element_validate($element, &$element_state) {
+  // validate 'other' job titled field populated if necessary
+  $job_title = $element['job_title'];
+  if ($element['job_title']['#value'] === 'Other') {
+    $job_title_other = &$element['job_title_other']['job_title_other'];
+    if (trim($job_title_other['#value']) === '') {
+      form_error($job_title_other, t('Please fill in your job title'));
+    }
+  }
+
+  return $element;
+}
+
+/**
+ * Implements hook_webform_component_info().
+ */
+function cr_eddirect_webform_component_info() {
+  $components = array();
+
+  $components['cr_eddirect_est'] = array(
+    'label' => t('Comic Relief edDirect establishment'),
+    'description' => t('Look up or manually enter addresses for educational establishments'),
+    'features' => array(
+      // Add content to CSV downloads.
+      'csv' => TRUE,
+      // This component does not support default values.
+      'default_value' => FALSE,
+      // This component supports a description field.
+      'description' => TRUE,
+      // Don't show this component in e-mailed submissions
+      'email' => FALSE,
+      // don't allow this component to be used as an e-mail FROM or TO address
+      'email_address' => FALSE,
+      // Don't allow this component to be used as an e-mail SUBJECT or FROM name.
+      'email_name' => FALSE,
+      // Allow  this component to be toggled as required or not
+      'required' => TRUE,
+      // This component supports a title attribute
+      'title' => TRUE,
+      // This component has a title that can be toggled as displayed or not.
+      'title_display' => TRUE,
+      // This component has a title that can be displayed inline.
+      'title_inline' => TRUE,
+      // This component can be used as a conditional SOURCE. All components
+      // may always be displayed conditionally, regardless of this setting.
+      'conditional' => FALSE,
+      // This component does not allow other components to be grouped within it
+      // (like a fieldset or tabs)
+      'group' => FALSE,
+      // This component cannot be used for SPAM analysis
+      'spam_analysis' => FALSE,
+      // If this component saves a file that can be used as an e-mail
+      // attachment
+      'attachment' => FALSE,
+      // If this component reflects a time range and should use labels such as
+      // "Before" and "After" when exposed as filters in Views module.
+      'views_range' => FALSE,
+      // May user mark fields as Private?
+      'private' => FALSE,
+    ),
+    'file' => 'webform_components/eddirect.inc',
+  );
+
+  return $components;
+}

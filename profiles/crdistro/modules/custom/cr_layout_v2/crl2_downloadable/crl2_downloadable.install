@@ -1,0 +1,128 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the test_entity module.
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function crl2_downloadable_uninstall() {
+  // Bypass entity_load() as we cannot use it here.
+  $downloadables = db_select('crl2_downloadable', 'et')
+    ->fields('et')
+    ->execute()
+    ->fetchAllAssoc('name');
+
+  // Delete associated file_managed files
+  foreach($downloadables as $name => $downloadable) {
+
+    // File
+    if($downloadable->file_upload != 0) {
+      _delete_file_by_fid($downloadable->file_upload);
+    }
+  }
+}
+
+/**
+ * Implements hook_schema().
+ */
+function crl2_downloadable_schema() {
+
+  $schema['crl2_downloadable'] = array(
+    'description' => 'Stores information about all defined CRL2 downloadables.',
+    'fields' => array(
+      'id' => array(
+        'type' => 'serial',
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique downloadable type ID.',
+      ),
+      'name' => array(
+        'description' => 'The machine-readable name of this downloadable.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+      ),
+      'label' => array(
+        'description' => 'The human-readable name of this downloadable.',
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+        'default' => 'unnamed_downloadable',
+      ),
+      'weight' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'size' => 'tiny',
+        'description' => 'The weight of this downloadable in relation to others.',
+      ),
+      'locked' => array(
+        'description' => 'A boolean indicating whether the administrator may delete this.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'size' => 'tiny',
+      ),
+      'data' => array(
+        'type' => 'text',
+        'not null' => FALSE,
+        'size' => 'big',
+        'serialize' => TRUE,
+        'description' => 'A serialized array of additional data related'
+          . ' to this downloadable.',
+        'merge' => TRUE,
+      ),
+      'status' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        // Set the default to ENTITY_CUSTOM without using the constant as it is
+        // not safe to use it at this point.
+        'default' => 0x01,
+        'size' => 'tiny',
+        'description' => 'The exportable status of the entity.',
+      ),
+      'module' => array(
+        'description' => 'The name of the providing module if the entity has been defined in code.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+      ),
+      'file_upload' => array(
+        'description' => 'The local file fid if used.',
+        'type' => 'int',
+        'size' => 'normal',
+      ),
+      'url' => array(
+        'description' => 'The external resource link if a local file isn\'t used.',
+        'type' => 'varchar',
+        'length' => 255,
+        'default' => '',
+      ),
+    ),
+    'primary key' => array('id'),
+    'unique keys' => array(
+      'name' => array('name'),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Helper function to delete a file by id.
+ */
+if (!function_exists('_delete_file_by_fid')) :
+  function _delete_file_by_fid($fid) {
+    if($fid != 0) {
+      $file = file_load($fid);
+
+      // Unregister this module's usage of the file
+      file_usage_delete($file, 'crl2_downloadable', 'crl2_downloadable', $fid);
+
+      // Delete the file if nothing else is using it
+      return file_delete($file);
+    }
+  }
+endif;

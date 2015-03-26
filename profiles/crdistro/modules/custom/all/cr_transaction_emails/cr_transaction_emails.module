@@ -1,0 +1,138 @@
+<?php
+/**
+ * @file
+ * Module to hold reused functionality for emails sent via SmartFocus
+ * (aka Campaign Commander, aka EmailVision)
+ */
+
+define('CR_TRANS_EMAIL_ENDPOINT', 'http://api.notificationmessaging.com/NMSREST');
+
+/**
+ * Implements hook_menu()
+ * @return mixed
+ */
+function cr_transaction_emails_menu() {
+  $items = array();
+  $items['admin/config/services/cr/transaction_emails'] = array(
+    'title' => t('SmartFocus email settings'),
+    'description' => t('Configure site wide settings for SmartFocus Email Provider'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cr_transaction_emails_settings_form'),
+    'access arguments' => array('administer site configuration'),
+  );
+
+  return $items;
+}
+
+/**
+ * Admin settings form
+ * @param $form
+ * @param $form_state
+ * @return mixed admin form
+ */
+function cr_transaction_emails_settings_form(array $form, array &$form_state) {
+  $form = array();
+  $form['server'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('SmartFocus email settings'),
+    '#description' => t('SmartFocus (aka Campaign Commander) site-wide settings '),
+    '#attributes' => array('class' => array('trans-email-admin-settings')),
+  );
+
+  $default_endpoint = variable_get('cr_trans_email_endpoint', CR_TRANS_EMAIL_ENDPOINT);
+
+  $form['server']['endpoint'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Transactional email service URL'),
+    '#description' => 'URL for 3rd party service triggering transactional emails',
+    '#maxlength' => 100,
+    '#default_value' => filter_xss_admin($default_endpoint),
+  );
+
+  $form['server']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Enter'),
+    '#attributes' => array('class' => array('button-trans-email', 'button')),
+  );
+
+  $form['#submit'] = array('cr_transaction_email_submit');
+
+  return $form;
+}
+
+/**
+ * Config form fieldset
+ * @param mixed $conf configuration values stored in the properties:
+ * trans_email_unique and trans_email_security
+ * @return mixed admin form
+ */
+function cr_transaction_emails_get_fieldset(array &$conf) {
+  $fieldset = array();
+  $fieldset['trans_emails'] = array(
+    '#type' => 'fieldset',
+    '#attributes' => array('class' => array('trans-email-settings')),
+  );
+
+  $unique = !empty($conf['trans_email_unique']) ? $conf['trans_email_unique'] : '';
+  $security = !empty($conf['trans_email_security']) ? $conf['trans_email_security'] : '';
+
+  $fieldset['trans_emails']['trans_email_unique'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Email unique key'),
+    '#description' => t('SmartFocus transactional email message unique key'),
+    '#maxlength' => 60,
+    '#default_value' => filter_xss_admin($unique),
+  );
+
+  $fieldset['trans_emails']['trans_email_security'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Email security key'),
+    '#description' => t('SmartFocus transactional email message security key'),
+    '#maxlength' => 60,
+    '#default_value' => filter_xss_admin($security),
+  );
+
+  return $fieldset;
+}
+
+/**
+ * Submit handler
+ * @param $form
+ * @param $form_state
+ */
+function cr_transaction_email_submit($form, &$form_state) {
+  $endpoint = $form_state['values']['endpoint'];
+  variable_set('cr_trans_email_endpoint', $endpoint);
+  drupal_set_message('The SmartFocus endpoint URL settings have been saved as: ' .
+    variable_get('cr_trans_email_endpoint'));
+}
+
+/**
+ * SmartFocus call to send a transactional email.
+ * @param $msg_unique key identifying a SmartFocus email message
+ * @param $msg_security security encryption key for the email message
+ * @param $trans_source transSource of transaction
+ *   (transaction type id used in corporate reporting)
+ */
+function cr_transaction_emails_send($email, $msg_unique, $msg_security, $trans_source) {
+
+  $query = array(
+    'random' => $msg_unique,
+    'encrypt' => $msg_security,
+    'email' => $email,
+    'senddate' => '2014-01-01 00:00:00', // Past dates always send immediately
+    'uidkey' => 'EMAIL',
+    'stype' => 'NOTHING',
+    'dyn' => 'transsource:' . $trans_source,
+  );
+
+  if ($query['random'] && $query['encrypt']) {
+    $email_endpoint = variable_get('cr_trans_email_endpoint', CR_TRANS_EMAIL_ENDPOINT);
+    $url = url($email_endpoint, array('query' => $query));
+    $result = drupal_http_request($url);
+    if ($result->code != 200) {
+      watchdog('cr_transaction_emails', 'SmartFocus API call error: !error',
+        array('!error' => $result->data), WATCHDOG_ERROR);
+    }
+  }
+}

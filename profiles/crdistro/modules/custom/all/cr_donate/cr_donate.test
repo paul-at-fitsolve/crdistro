@@ -1,0 +1,88 @@
+<?php
+
+/**
+ * @file
+ * Tests for cr_donate.module.
+ */
+
+/**
+ * Unit tests for cr_donate.module.
+ */
+class CrDonateWorldPayCallbackTest extends DrupalWebTestCase {
+
+  public static function getInfo() {
+    return array(
+      'name' => 'Donate WorldPay callback',
+      'description' => 'Test the cr_donate_worldpay_complete() function.',
+      'group' => 'Comic Relief',
+    );
+  }
+
+  function setUp() {
+    // Install ctools as we use the object cache.
+    // Install message_broker_dummy as a mock message queue implementation.
+    parent::setUp('cr_donate', 'ctools', 'message_broker', 'message_broker_dummy');
+    variable_set('message_broker_implementation', 'dummy');
+    variable_set('message_broker_dummy_config', drupal_get_path('module', 'cr_message_queues') . '/cr_message_queues.json');
+  }
+
+  /**
+   * Test if cr_donate_worldpay_complete() handles a successful return from WorldPay.
+   */
+  function testWorldPaySuccessStatus() {
+    $_POST = array(
+      'email' => 'd.long@comicrelief.com',
+      'transStatus' => 'Y',
+      'MC_url_redirect' => url('donate/thankyou', array('absolute' => TRUE)),
+      'cartId' => $this->randomName(10),
+      'transId' => $this->randomName(10),
+      'transTime' => $this->randomName(10),
+      'amount' => mt_rand(1, 100),
+    );
+
+    // Test the WorldPay callback output.
+    $output = cr_donate_worldpay_complete();
+
+    $this->assertTrue(strpos($output, '<wpdisplay item=banner') !== FALSE, 'WorldPay banner is included in the output');
+    $this->assertTrue(strpos($output, $_POST['MC_url_redirect']) !== FALSE, 'Redirect URL is included in the output');
+    $this->assertTrue(strpos($output, 'cartId=' . urlencode($_POST['cartId'])) !== FALSE, 'Cart ID is included in the output URL');
+    $this->assertTrue(strpos($output, 'transId=' . urlencode($_POST['transId'])) !== FALSE, 'Transaction ID is included in the output URL');
+    $this->assertTrue(strpos($output, 'transTime=' . urlencode($_POST['transTime'])) !== FALSE, 'Transaction time is included in the output URL');
+    $this->assertTrue(strpos($output, 'amount=' . urlencode($_POST['amount'])) !== FALSE, 'Donation amount is included in the output URL');
+
+    // Test the header redirect.
+    $header = drupal_add_html_head();
+    $url = $header['cr_donate']['#attributes']['content'];
+
+    $this->assertTrue(strpos($url, $_POST['MC_url_redirect']) !== FALSE, 'Redirect URL is included in the header');
+    $this->assertTrue(strpos($url, 'cartId=' . urlencode($_POST['cartId'])) !== FALSE, 'Cart ID is included in the header URL');
+    $this->assertTrue(strpos($url, 'transId=' . urlencode($_POST['transId'])) !== FALSE, 'Transaction ID is included in the header URL');
+    $this->assertTrue(strpos($url, 'transTime=' . urlencode($_POST['transTime'])) !== FALSE, 'Transaction time is included in the header URL');
+    $this->assertTrue(strpos($url, 'amount=' . urlencode($_POST['amount'])) !== FALSE, 'Donation amount is included in the header URL');
+  }
+
+
+  /**
+   * Test if cr_donate_worldpay_complete() handles a cancelled return from WorldPay.
+   */
+  function testWorldPayCancelStatus() {
+    $_POST = array(
+      'email' => 'd.long@comicrelief.com',
+      'transStatus' => 'C',
+      'MC_url_cancel' => url('donate/cancel', array('absolute' => TRUE)),
+    );
+
+    // Test the WorldPay callback output.
+    $output = cr_donate_worldpay_complete();
+
+    $this->assertTrue(strpos($output, '<wpdisplay item=banner') !== FALSE, 'WorldPay banner is included in the output');
+    $this->assertTrue(strpos($output, $_POST['MC_url_cancel']) !== FALSE, 'Redirect URL is included in the output');
+
+    // Test the header redirect.
+    $header = drupal_add_html_head();
+    $url = $header['cr_donate']['#attributes']['content'];
+
+    $this->assertTrue(strpos($url, $_POST['MC_url_cancel']) !== FALSE, 'Redirect URL is included in the header');
+  }
+
+}

@@ -1,0 +1,46 @@
+<?php
+
+function cr_fg_services_menu() {
+  $items['admin/config/content/rude-words-filter'] = array (
+    'title' => 'Rude Words Filter',
+    'description' => 'Rude Words Filter',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cr_fg_services_admin_settings'),
+    'access arguments' => array('access administration pages'),
+    'type' => MENU_NORMAL_ITEM
+  );
+  return $items;
+}
+
+function cr_fg_services_permissions() {
+  $permissions = array (
+    'administer rude words' => array (
+      'title' => t('Administer rude wors'),
+      'decription' => t('Which words that are replaced with ***'),
+    ),
+  );
+  return $permissions;
+}
+
+function cr_fg_services_admin_settings() {
+  $form['cr_fg_services_rude_words'] = array (
+    '#title' => 'Rude words',
+    '#description' => t('Enter words you wish to be filtered by the kids services, they can contain spaces. Seperate each word with a comma (,)'),
+    '#type' => 'textarea',
+    '#default_value' => variable_get('cr_fg_services_rude_words', ''),
+  );
+  return system_settings_form($form);
+}
+
+function cr_fg_services_admin_settings_validate($form, &$form_state) {
+  $rude_words = array();
+  foreach (explode(',', $form_state['values']['cr_fg_services_rude_words']) as $word) {
+    $rude_words[] = $word;
+  }
+  $form_state['values']['cr_fg_services_rude_words'] = implode(',', $rude_words);
+}
+
+function cr_fg_services_sanitize($s) {
+  return str_ireplace(explode(',', variable_get('cr_fg_services_rude_words')), '[**]',$s);
+}
+

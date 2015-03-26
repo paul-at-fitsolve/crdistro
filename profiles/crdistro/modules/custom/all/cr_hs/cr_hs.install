@@ -1,0 +1,81 @@
+<?php
+
+/**
+  * Provides the basic schema for the ideas generator
+  * The ideas generator needs to track:
+  * - Name(String) 35 Char
+  * - Age(Int)
+  * - Idea(String)
+  */
+
+function cr_hs_install() {
+  module_load_include('inc', 'cr_hs', 'cr_hs.func');
+  variable_set('cr_hs_api_token', _cr_hs_generate_token());
+  drupal_set_message("Generated token for High Scores API");
+}
+
+function cr_hs_schema() {
+  $schema = array();
+
+  $schema['cr_hs_scores'] = array (
+    'description' => 'Stores the idividual scores',
+    'fields' => array (
+      'id' => array (
+        'description' => 'Primary Key of score entry',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'username' => array (
+        'description' => 'The username of the participant',
+        'type' => 'varchar',
+        'not null' => TRUE,
+        'length' => 35,
+      ),
+      'score' => array (
+        'description' => 'Score of the participant',
+        'type' => 'int',
+        'size' => 'normal',
+        'not null' => TRUE,
+        'unsigned' => TRUE,
+      ),
+      'gameid' => array (
+        'description' => 'Which game is the submission for',
+        'type' => 'varchar',
+        'not null' => TRUE,
+        'length' => 8,
+      ),
+      'timestamp' => array (
+        'description' => 'Timestamp of when the score was submitted by the client',
+        'type' => 'int', 
+        'size' => 'big',
+        'not null' => TRUE,
+        'unsigned' => FALSE,
+      ),
+      'nonce' => array(
+        'description' => 'Stores the nonce of each submission',
+        'type' => 'text',
+        'size' => 'tiny',
+        'not null' => TRUE,
+      ),
+      'published' => array (
+        'description' => 'Only show the published scores',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'size' => 'tiny',
+        'default' => 0,
+      ),
+    ),
+    'primary key' =>  array('id'),
+    'mysql_engine' => 'InnoDB',
+  );
+
+  return $schema;
+}
+
+function cr_hs_uninstall() {
+  field_attach_delete_bundle('cr_hs_scores', 'cr_hs_scores');
+  variable_del('cr_hs_api_token');
+}
+

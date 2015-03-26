@@ -1,0 +1,180 @@
+From 893ab397e3be6d79150de1d6e0218998a6b4f149 Mon Sep 17 00:00:00 2001
+From: Jeremy Pitt <jeremy@jnpwebdeveloper.com>
+Date: Thu, 29 Jan 2015 14:52:42 +0000
+Subject: [PATCH] RED-2464 Patch that updates pane cache settings of all
+ display panes in one go!
+
+---
+ .../panels_hash_cache/panels_hash_cache.admin.inc  | 69 +++++++++++++++++++++-
+ .../panels_hash_cache/panels_hash_cache.module     | 64 ++++++++++++++++++++
+ 2 files changed, 132 insertions(+), 1 deletion(-)
+
+diff --git a/public/sites/all/modules/contrib/panels_hash_cache/panels_hash_cache.admin.inc b/public/sites/all/modules/contrib/panels_hash_cache/panels_hash_cache.admin.inc
+index aaff0d8..39cce3f 100644
+--- a/public/sites/all/modules/contrib/panels_hash_cache/panels_hash_cache.admin.inc
++++ b/public/sites/all/modules/contrib/panels_hash_cache/panels_hash_cache.admin.inc
+@@ -8,6 +8,8 @@
+  * FormAPI callback for building the settings form.
+  */
+ function panels_hash_cache_admin_settings() {
++  ctools_include('dependent');
++
+   $form = array();
+   $form['panels_hash_cache_reset_key'] = array(
+     '#type' => 'textfield',
+@@ -15,6 +17,7 @@ function panels_hash_cache_admin_settings() {
+     '#default_value' => variable_get('panels_hash_cache_reset_key', ''),
+     '#description' => t('Optionally allow the cache to be regenerated via the URL using a key by hitting the page with the query "?panels-hash-cache-reset={key}". This lets, for example, to automatically re-generate a cache using cron hitting a URL. This way users never see uncached content.'),
+   );
++
+   $form['panels_hash_cache_disabled'] = array(
+     '#type' => 'checkbox',
+     '#title' => t('Disable panels-hash-cache'),
+@@ -22,5 +25,69 @@ function panels_hash_cache_admin_settings() {
+     '#description' => t('Disable panels-hash-cache for development purposes'),
+   );
+ 
++  $form['panels_hash_cache_enable_on_display'] = array(
++    '#type' => 'checkbox',
++    '#title' => t('Update Panes on Display Save'),
++    '#default_value' => variable_get('panels_hash_cache_enable_on_display', FALSE),
++    '#description' => t('Enable pane-hash-cache on all panes of a display on display save with settings below.'),
++  );
++
++  $options = drupal_map_assoc(array(15, 30, 60, 120, 180, 240, 300, 600, 900, 1200, 1800, 3600, 7200, 14400, 28800, 43200, 86400, 172800, 259200, 345600, 604800), 'format_interval');
++  $form['panels_hash_cache_lifetime'] = array(
++    '#title' => t('Maximum Lifetime'),
++    '#type' => 'select',
++    '#options' => $options,
++    '#default_value' => variable_get('panels_hash_cache_lifetime', 15),
++    '#description' => t('The cache will be expired after this amount of time elapses. Note that the cache will also automatically be rotated (expired) if any of the granularity-circumstances (set below) are changed or updated.')
++  );
++
++  $form['panels_hash_cache_granularity'] = array(
++    '#title' => t('Granularity'),
++    '#type' => 'checkboxes',
++    '#options' => array(
++      'args' => t('Arguments'),
++      'context' => t('Context'),
++      'url' => t('Full URL (including query strings)'),
++      'path' => t('Drupal Menu Path and Arguments'),
++      'user' => t('Active User'),
++      'user_role' => t('Active User\'s Role'),
++    ),
++    '#description' => t('The methods in which you wish to store and expire the cache. A change in any of these things will result in a new cache being generated. If more than one is selected, a unique cache will be created for that combination and the cache expires upon a change if any of the components.'),
++    '#default_value' => variable_get('panels_hash_cache_granularity', ''),
++  );
++
++  $roles = user_roles(TRUE);
++  $roles[DRUPAL_AUTHENTICATED_RID] .= ' ' . t('(all logged in users with no additional roles)');
++  $form['panels_hash_cache_granularity_roles_as_anon'] = array(
++    '#type' => 'checkboxes',
++    '#title' => t('Treat users with these role(s) as anonymous'),
++    '#options' => $roles,
++    '#default_value' => variable_get('panels_hash_cache_granularity_roles_as_anon', array()),
++    '#description' => t("If the user is logged in and has one of these roles, cache the pane as if the user is anonymous. The 'authenticated user' role is only used if the user does not have any other role."),
++    '#dependency' => array(
++      'edit-settings-granularity-user-role' => array(1),
++    ),
++  );
++
++  $form['panels_hash_cache_granularity_role_selection'] = array(
++    '#type' => 'radios',
++    '#title' => t('How to handle multiple roles:'),
++    '#default_value' => variable_get('panels_hash_cache_granularity_role_selection', 'all'),
++    '#options' => array(
++      'all' => t('Use all matching roles; this can lead to a huge number of cache objects due to the possible combinations of roles.'),
++      'first' => t('Only use first matching role; useful when roles decrease in permissiveness, e.g. Admin, Editor, Author.'),
++      'last' => t('Only use last matching role; useful when roles increase in permissiveness, e.g. Author, Editor, Admin.'),
++    ),
++    '#description' => t('If the user has more than one role, control how the additional roles are considered. This selection does not take into consideration the automatic "authenticated user" role.'),
++    '#dependency' => array(
++      'edit-settings-granularity-user-role' => array(1),
++    ),
++  );
++
++  // Add support for the Domain Access module.
++  if (module_exists('domain')) {
++    $form['panels_hash_cache_granularity']['#options']['domain'] = t('Current domain (Domain Access)');
++  }
++
+   return system_settings_form($form);
+-}
++}
+\ No newline at end of file
+diff --git a/public/sites/all/modules/contrib/panels_hash_cache/panels_hash_cache.module b/public/sites/all/modules/contrib/panels_hash_cache/panels_hash_cache.module
+index a174150..42712c5 100644
+--- a/public/sites/all/modules/contrib/panels_hash_cache/panels_hash_cache.module
++++ b/public/sites/all/modules/contrib/panels_hash_cache/panels_hash_cache.module
+@@ -32,3 +32,67 @@ function panels_hash_cache_menu() {
+   );
+   return $items;
+ }
++
++/**
++ * Implements hook_display_before_save
++ * @param  object $display pane display object passed in from the module invoke all hook
++ * @return object $display
++ */
++function panels_hash_cache_panels_display_before_save($display) {
++  $panels_hash_cache_disabled = variable_get('panels_hash_cache_disabled', FALSE);
++  $panels_hash_cache_enable_on_display = variable_get('panels_hash_cache_enable_on_display', FALSE);
++
++  // If panels hash cache is totally disabled, return;
++  if ($panels_hash_cache_disabled) {
++    return $display;
++  }
++
++  // Setting cache array empty here means, that if enable on display is turned off, it will ensure no caching is set on a page
++  $cache_array = array();
++
++  if ($panels_hash_cache_enable_on_display) {
++    /**
++     * Create a cache array based on hash cache settings form
++     * @var array
++     */
++    $cache_array = array(
++      'method' => 'panels_hash_cache',
++      'settings' => array(
++        'lifetime' => variable_get('panels_hash_cache_lifetime', 15),
++        'granularity' => variable_get('panels_hash_cache_granularity', array()),
++        'granularity_roles_as_anon' => variable_get('panels_hash_cache_granularity_roles_as_anon', array()),
++        'granularity_role_selection' => variable_get('panels_hash_cache_granularity_role_selection', 'all'),
++      ),
++    );
++  }
++
++  /**
++   * Loop through the panes in this display and set the pane hash cache
++   */
++  $pane_cache_settings_saved = array();
++  if($display->content && is_array($display->content)) {
++    foreach($display->content as $pane_id => $pane) {
++      if(isset($display->content[$pane_id]->cache)) {
++        
++        // Skip if we have another caching method or the caching method is empty
++        if(isset($display->content[$pane_id]->cache['method']) && $display->content[$pane_id]->cache['method'] !== 'panels_hash_cache') continue;
++
++        $display->content[$pane_id]->cache = $cache_array;
++        $pane_cache_settings_saved[] = $pane_id;
++      }
++    }
++  }
++
++  $pane_ids_string = implode(', ', $pane_cache_settings_saved);
++  $display_title = isset($display->title) ? $display->title : $display->uuid;
++  $set_cache_action_string = isset($cache_array['method']) && $cache_array['method'] == 'panels_hash_cache' ? 'Set panels hash cache' : 'Removed panels cache';
++
++  /**
++   * Log the fact that we updated the cache to pane hash cache on these panes
++   */
++  if(count($pane_cache_settings_saved)) {
++    watchdog('panels_hash_cache', "%action of the following panes: %panes on %title", array('%action' => $set_cache_action_string, '%panes' => $pane_ids_string, '%title' => $display_title ), WATCHDOG_INFO);
++  }
++
++  return $display;
++}
+\ No newline at end of file
+-- 
+2.2.1
+

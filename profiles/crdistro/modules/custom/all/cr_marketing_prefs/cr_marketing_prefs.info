@@ -1,0 +1,13 @@
+name = Marketing preferences
+description = Provides email signup functionality
+core = 7.x
+package = "Comic Relief"
+php = 5.2.4
+dependencies[] = bean
+dependencies[] = context
+dependencies[] = cr_webservices
+dependencies[] = ctools
+dependencies[] = elements
+files[] = cr_marketing_prefs.bean.inc
+stylesheets[all][] = css/cr_marketing_prefs.css
+

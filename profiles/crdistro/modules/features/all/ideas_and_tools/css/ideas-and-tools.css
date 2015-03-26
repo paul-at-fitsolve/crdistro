@@ -1,0 +1,251 @@
+/* General */
+.hide, .filtered {
+  display: none !important;
+}
+
+/* Ideas */
+.responsive-layout-wide .ideas-tips .item-row { height: 720px; }
+
+.ideas-tips .item-column {   
+  padding: 30px;   
+  margin-bottom: 20px; 
+  min-height: 169px;
+  float: left;  
+  display: block; 
+  cursor: pointer;
+  background-color: #fff; 
+  text-align: center;
+  position: relative; 
+  overflow: hidden; 
+  border-radius: 3px;
+  -webkit-border-radius: 3px;
+  -moz-border-radius: 3px;
+  -o-border-radius: 3px; 
+} 
+
+.ideas-tips .active-item,
+.ideas-tips .item-column.hover { color: #fff; background-color: #333;  }
+.ideas-tips .active-item .fr-more,
+.ideas-tips .item-column.hover .fr-more { color: #fff; }
+
+.ideas-tips .divider { clear: both; height: 10px; display: block; }
+.ideas-tips .divider:after { content: ""; height: 1px; width: 100%; display: block; clear: both; }
+ 
+.ideas-tips .views-field-field-fundraising-ideas-id { height: 0px; }
+.ideas-tips .views-field-title { font-size: 21px; line-height: 22px; position: relative; top: 75px; } 
+.ideas-tips .views-field-field-associated-downloads { display: none; position: relative; top: 20px; }
+.ideas-tips .views-field-body { font-size: 14px; position: relative; top: 55px; display: none;}
+.ideas-tips .collapse .views-field-title { top: 50px; }
+.ideas-tips .collapse .views-field-body { top: 20px;  }
+.ideas-tips .collapse .fr-icons  { top: 10px; }
+.ideas-tips .fr-icons { position: relative; top: 35px; }
+.ideas-tips .fr-more { position: absolute; top: 13px; right: 9px; color: #dbdbd3; }
+.ideas-tips .fr-gettools { position: absolute; top: 11px; right: 40px; width: 79px; height: 24px; display: none; }
+.ideas-tips .item-column.hover .fr-gettools { display: block; }
+
+/* hover state */
+.ideas-tips .active-item .views-field-body,
+.ideas-tips .hover .views-field-body { display: block; }
+.ideas-tips .active-item .views-field-title,
+.ideas-tips .active-item .fr-icons,
+.ideas-tips .hover .views-field-title,
+.ideas-tips .hover .fr-icons,
+.ideas-tips .active-item .fr-gettools,
+.ideas-tips .active-item.hover .fr-gettools { display: none; }
+
+/* Responsive hover state */
+.responsive-layout-mobile .ideas-tips .views-field-body,
+.responsive-layout-mobile .ideas-tips .active-item .views-field-title,
+.responsive-layout-mobile .ideas-tips .active-item .fr-icons,
+.responsive-layout-mobile .ideas-tips .hover .views-field-title,
+.responsive-layout-mobile .ideas-tips .hover .fr-icons { display: block; }
+.responsive-layout-mobile .ideas-tips .fr-gettools { display: none !important; }
+
+/* Reponsive - font size, line-height */
+.responsive-layout-wide .ideas-tips,
+.responsive-layout-normal .ideas-tips, 
+.responsive-layout-narrow .ideas-tips { margin-right: -20px; }
+.responsive-layout-wide .ideas-tips .item-column { width: 24%; margin-right: 20px; max-width: 220px; }
+.responsive-layout-normal .ideas-tips .item-column { width: 18.7%; margin-right: 20px; padding: 30px 20px; }
+.responsive-layout-narrow .ideas-tips .item-column { width: 16.6%; margin-right: 20px; padding: 30px 20px; min-height: 195px; }
+.responsive-layout-narrow .ideas-tips .item-column.collapse { padding: 20px 20px; }
+.responsive-layout-normal .ideas-tips .views-field-title  { font-size: 19px; line-height: 21px; top: 80px;}
+.responsive-layout-normal .ideas-tips .views-field-body { font-size: 14px; line-height: 16px; }
+.responsive-layout-narrow .ideas-tips .views-field-title  { font-size: 17px; line-height: 19px; top: 80px; }
+.responsive-layout-narrow .ideas-tips .views-field-body { font-size: 13px; line-height: 16px; }
+.responsive-layout-narrow .ideas-tips .collapse .views-field-body { }
+.responsive-layout-narrow .ideas-tips .collapse .views-field-body { top: 0px !important; }
+.responsive-layout-mobile .ideas-tips .item-column { text-align: left; float: none; padding: 20px; min-height: 70px; margin-bottom: 10px; }
+.responsive-layout-mobile .ideas-tips .views-field-field-fundraising-ideas-id { float: left; text-align: center; margin-top: 10px; }
+.responsive-layout-mobile .ideas-tips .views-field-title { top: 0px; margin-left: 55px; margin-bottom: 5px; min-height: 50px;}
+.responsive-layout-mobile .ideas-tips .fr-icons { top: 0px; }
+.responsive-layout-mobile .ideas-tips .views-field-body { top: 0px; }
+
+/* Tool list */
+.fundraise-tools .views-row .views-column .curtain .tool-id, .associated-tools .curtain .tool-id { display: none; }
+.fundraise-tools .views-row, .associated-tools { clear: both; }
+.fundraise-tools .views-row .views-column { margin: 0px 0px 20px 17px; }
+.associated-tools .associated-item { margin: 30px 0px 30px 17px; }
+.fundraise-tools .views-row .views-column, .associated-tools .associated-item { 
+  position: relative; 
+  overflow: hidden; 
+  float: left;  
+  background-color: #fff;
+  border: 1px solid #fff;
+  border-radius: 3px;
+  -webkit-border-radius: 3px;
+  -moz-border-radius: 3px;
+  -o-border-radius: 3px;   
+  line-height: 1.5em;
+  color: #000;  
+  text-align: center; 
+  }
+  .fundraise-tools .views-row .views-column-1, .associated-tools .associated-item:first-of-type { margin-left: 0px; }
+  .responsive-layout-wide .fundraise-tools .views-row .views-column, .responsive-layout-wide  .fundraise-tools .curtain, .responsive-layout-wide  .fundraise-tools .tile, .responsive-layout-wide  .fundraise-tools .inner-wrap { height: 180px; width: 180px; }
+    .tile { display: table; }
+    .inner-wrap { display: table-cell; vertical-align: middle; padding: 0px 15px;}
+    .curtain h2.title, .curtain .download-ref { font-size: 16px; font-weight: bold; margin-top: 30px; }
+    .curtain {
+        position: absolute;
+        top:-180px;
+        bottom: 0px;
+        -webkit-transition-property: top, bottom;
+        -webkit-transition-duration: 0.5s;
+        -moz-transition-property: top, bottom;
+        -moz-transition-duration: 0.5s;
+        -o-transition-property: top, bottom;
+        -o-transition-duration: 0.5s;
+    }
+    .curtain:hover {
+        top:0px;
+        bottom: -180px;
+    }
+    .normal-state .download-ref { display: none; } 
+
+  /* tool list - expand div */
+  .associated-tools-wrapper { display: none; max-width: 1180px; margin-right: 20px; }
+  .associated-tools { position: relative; overflow: hidden; display: block; padding-right: 30px; background-color: #292929; margin-bottom: 20px; border-radius: 3px; -webkit-border-radius: 3px; -moz-border-radius: 3px; -o-border-radius: 3px; }
+  .associated-tools .associated-items-first { border: 0px solid #ccc; background-color: transparent; width: 235px; color: #fff; float: left; margin: 30px -15px 0px 30px; }
+  .associated-tools .associated-items-first h2, .associated-tools .associated-items-first h3 { color: #fff; margin: 0px; }
+  .associated-tools .associated-item { margin-left: 18px; line-height: 1.3em; }
+  .associated-tools .associated-item, .associated-tools .associated-item .curtain, .associated-tools .tile, .associated-tools .inner-wrap { height: 130px; width: 130px; }
+  .associated-tools .associated-item .curtain { top:-130px; bottom: 0px; }
+  .associated-tools .associated-item .curtain:hover { top:0px; bottom: -130px; }
+  .associated-tools .associated-item .curtain h2.title, .associated-tools .associated-item .curtain .download-ref { font-size: 14px; margin-top: 10px; }
+  .associated-tools .fr-share-widget ul li { float: left; margin-right: 10px; margin-top: 3px; }
+  .associated-tools .fr-share-widget ul li.first { width: 60px; }
+  .associated-tools .fr-shares { text-align: left; font-size: 15px; margin-top: 13px; margin-left: 4px; }
+  .associated-tools .fr-holder { background-color: #545454; border: 1px solid #545454; }
+
+/* Responsive - tool list - expand div */
+.responsive-layout-normal .associated-tools,
+.responsive-layout-narrow .associated-tools { padding-left: 4px; padding-right: 0px; }
+.responsive-layout-mobile .associated-tools { margin-bottom: 10px; }
+.responsive-layout-normal .associated-tools .associated-items-first,
+.responsive-layout-narrow .associated-tools .associated-items-first { width: 100%; clear: both; height: 35px; }
+.responsive-layout-normal .associated-tools .associated-items-first { margin-left: 20px; }
+.responsive-layout-narrow .associated-tools .associated-items-first { margin-left: 10px; }
+.responsive-layout-normal .associated-tools .associated-items-first h2, .responsive-layout-normal .associated-tools .associated-items-first h3,
+.responsive-layout-narrow .associated-tools .associated-items-first h2, .responsive-layout-narrow .associated-tools .associated-items-first h3,
+.responsive-layout-mobile .associated-tools .associated-items-first h2, .responsive-layout-mobile .associated-tools .associated-items-first h3  { float: left; }
+.responsive-layout-narrow ul.social-links-list { margin: 0px !important; }
+.responsive-layout-normal .associated-tools .fr-shares, 
+.responsive-layout-narrow .associated-tools .fr-shares { margin-top: 0px; float: right; }
+.responsive-layout-normal .associated-tools .fr-shares { margin-right: 55px; }
+.responsive-layout-narrow .associated-tools .fr-shares { margin-right: 25px; }
+.responsive-layout-normal .associated-tools .fr-shares p,
+.responsive-layout-narrow .associated-tools .fr-shares p,
+.responsive-layout-normal .associated-tools .fr-share-widget,
+.responsive-layout-narrow .associated-tools .fr-share-widget { display: inline-block; }
+.responsive-layout-normal .associated-tools .fr-share-widget ul li,
+.responsive-layout-narrow .associated-tools .fr-share-widget ul li { margin-top: 0px; margin-right: 0px; margin-left: 10px; }
+.responsive-layout-normal .associated-tools .fr-share-widget ul li.first,
+.responsive-layout-narrow .associated-tools .fr-share-widget ul li.first { margin-left: 10px; }
+.responsive-layout-normal .associated-tools .associated-item, 
+.responsive-layout-narrow .associated-tools .associated-item { line-height: 1.3em; }
+.responsive-layout-normal .associated-tools .associated-item { margin: 10px 0px 30px 20px; }
+.responsive-layout-narrow .associated-tools .associated-item  { margin: 20px 0px 18px 12px; }
+.responsive-layout-normal .associated-tools .associated-item .curtain h2.title { font-size: 14px; margin-top: 10px; } 
+.responsive-layout-narrow .associated-tools .associated-item .curtain h2.title,
+.responsive-layout-narrow .associated-tools .associated-item .curtain .download-ref { margin-top: 5px; font-size: 12px; }
+
+.responsive-layout-narrow .associated-tools .associated-item, .responsive-layout-narrow .associated-tools .associated-item .curtain, .responsive-layout-narrow .associated-tools .tile, .responsive-layout-narrow .associated-tools .inner-wrap { height: 130px; width: 100px; }
+.responsive-layout-mobile .associated-tools .associated-item, .responsive-layout-mobile .associated-tools .associated-item .curtain, .responsive-layout-mobile .associated-tools .tile, .responsive-layout-mobile .associated-tools .inner-wrap { height: 155px; }
+.responsive-layout-narrow .associated-tools .associated-item { margin-left: 12px; } 
+.responsive-layout-narrow .associated-tools .associated-item .curtain,
+.responsive-layout-mobile .associated-tools .associated-item .curtain { top: 0px; }
+.responsive-layout-narrow .associated-tools .associated-item .inner-wrap { padding: 0px 10px; }
+
+.responsive-layout-mobile .associated-tools-wrapper { margin-right: 0px; }
+.responsive-layout-mobile .associated-tools .associated-item, 
+.responsive-layout-mobile .associated-tools .associated-item .curtain, 
+.responsive-layout-mobile .associated-tools .tile, 
+.responsive-layout-mobile .associated-tools .inner-wrap { width: 123px; height: 190px; }
+.responsive-layout-mobile .associated-tools .associated-item { margin: 5px; }
+.responsive-layout-mobile .associated-tools .associated-item .curtain h2.title, .responsive-layout-mobile .associated-tools .associated-item .curtain .download-ref { margin-top: 5px; }
+.responsive-layout-mobile .associated-tools { padding: 0px 5px 10px 5px; }
+.responsive-layout-mobile .associated-tools .associated-items-first { width: 100%; text-align: left; margin: 20px 0px 0px 5px; height: 70px; }
+.responsive-layout-mobile .associated-tools .fr-shares { font-size: 14px; line-height: 25px; display: inline-block; }
+.responsive-layout-mobile .associated-tools .fr-shares p { width: auto; float: left; }
+.responsive-layout-mobile .fr-share-widget { float: right; margin-left: 10px; }
+
+/* Responsive - tool list */
+.responsive-layout-normal .fundraise-tools .views-row .views-column, .responsive-layout-normal .fundraise-tools .curtain, .responsive-layout-normal .fundraise-tools .tile, .responsive-layout-normal .fundraise-tools .inner-wrap { width: 140px; height: 160px; }
+.responsive-layout-normal .fundraise-tools .curtain { top:-160px; bottom: 0px; }
+.responsive-layout-normal .fundraise-tools .curtain:hover { bottom: -160px; top:0px; }
+.responsive-layout-normal .curtain h2.title, .responsive-layout-normal .curtain .download-ref { font-size: 14px; margin-top: 10px; line-height: 1.3em; }
+
+.responsive-layout-narrow .fundraise-tools .views-row .views-column { margin: 10px 0px 0px 17px; } 
+.responsive-layout-narrow .fundraise-tools .views-row .views-column-1 { margin-left: 0px; }
+.responsive-layout-narrow .fundraise-tools .views-row .views-column, .responsive-layout-narrow .fundraise-tools .curtain, .responsive-layout-narrow .fundraise-tools .tile, .responsive-layout-narrow .fundraise-tools .inner-wrap { width: 100px; height: 160px; min-height: 105px; }
+.responsive-layout-narrow .curtain { top: 0px; bottom: 0px; }
+.responsive-layout-narrow .curtain:hover { bottom: -160px; top:0px; }
+.responsive-layout-narrow .curtain h2.title, .responsive-layout-narrow .curtain .download-ref { font-size: 12px; margin-top: 5px; line-height: 1em; }
+.responsive-layout-narrow .rollover-state { display: none; }
+.responsive-layout-narrow .normal-state .download-ref { display: block; }
+.responsive-layout-narrow .icon img { width: 70%; margin: 0px auto; }
+
+.responsive-layout-mobile .fundraise-tools .views-row .views-column { width: 45%; max-width: 170px; height: 170px; margin: 5px; }
+.responsive-layout-mobile .fundraise-tools .views-row .views-column, .responsive-layout-mobile .associated-tools li, .responsive-layout-mobile .curtain, .responsive-layout-mobile .tile, .responsive-layout-mobile .inner-wrap { min-height: 170px; }
+.responsive-layout-mobile .curtain { top: 0px; bottom: 0px; }
+.responsive-layout-mobile .curtain:hover { bottom: -175px; top:0px; }
+.responsive-layout-mobile .curtain h2.title, .responsive-layout-mobile .curtain .download-ref { margin-top: 10px; }
+
+.responsive-layout-narrow .rollover-state,
+.responsive-layout-mobile .rollover-state { display: none; }
+.responsive-layout-narrow .normal-state .download-ref,
+.responsive-layout-mobile .normal-state .download-ref  { display: block; }
+
+/* iPhone 5 in landscape */
+@media only screen and (min-device-width : 320px) and (max-device-width : 568px) and (orientation : landscape) {
+  .responsive-layout-mobile .associated-tools .associated-item, 
+  .responsive-layout-mobile .associated-tools .associated-item .curtain, 
+  .responsive-layout-mobile .associated-tools .tile, 
+  .responsive-layout-mobile .associated-tools .inner-wrap {
+    /*width: 117px !important;*/
+  }
+}
+/* iPhone 5 in portrait */
+@media only screen and (min-device-width : 320px) and (max-device-width : 568px) and (orientation : portrait) {
+
+}
+/* iPhone 2G-4S in landscape */
+@media only screen and (-webkit-min-device-pixel-ratio : 1.5) and (min-device-width : 320px) and (max-device-width : 480px) and (orientation : landscape) { 
+  .responsive-layout-mobile .associated-tools .associated-item, 
+  .responsive-layout-mobile .associated-tools .associated-item .curtain, 
+  .responsive-layout-mobile .associated-tools .tile, 
+  .responsive-layout-mobile .associated-tools .inner-wrap {
+    /*width: 130px !important;*/
+  }
+  .responsive-layout-mobile .associated-tools .fr-holder {
+    display: none; 
+  }
+}
+/* iPhone 2G-4S in portrait */
+@media only screen and (min-device-width : 320px) and (max-device-width : 480px) and (orientation : portrait) { 
+}
+
+@media all and (min-width: 321px) and (min-width: 670px) {
+  .responsive-layout-mobile .fundraise-tools .views-row .views-column { margin: 10px 5px;  } 
+}
+

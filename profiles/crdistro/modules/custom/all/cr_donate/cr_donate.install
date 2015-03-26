@@ -1,0 +1,99 @@
+<?php
+
+function cr_donate_requirements($phase) {
+  if ($phase == 'runtime') {
+    $req = array(
+      'title' => 'GiftAid Transport Backend',
+    );
+
+    if (module_exists('cr_message_queues') === FALSE && module_exists('cr_webservices')) {
+      $req['value'] = t('Could not find any transport backends, please enable at least one');
+      $req['severity'] = REQUIREMENT_ERROR;
+    }
+    else {
+      $req['value'] = 'Transport backend available';
+      $req['severity'] = REQUIREMENT_OK;
+    }
+    return array('cr_donate' => $req);
+  }
+}
+
+function cr_donate_uninstall() {
+  variable_del('cr_donate_methods');
+  variable_del('cr_donate_worldpay_installation');
+  variable_del('cr_donate_worldpay_account');
+  variable_del('cr_donate_worldpay_description');
+  variable_del('cr_donate_giftaid_transport_backend');
+}
+
+
+/**
+ * Implements hook_schema().
+ */
+function cr_donate_schema() {
+  $schema['cr_donate_giftaid_cancel'] = array(
+    'description' => 'Holds data related to giftaid cancellation requests.',
+    'fields' => array(
+      'gavin_id' => array(
+        'description' => 'The GAVIN id of the giftaid record being cancelled',
+        'type' => 'varchar',
+        'length' => 20, // matches max length in GAVIN database.
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'email' => array(
+        'type' => 'varchar',
+        'length' => 254,
+        'not null' => FALSE,
+        'default' => '',
+        'description' => "User's e-mail address.",
+      ),
+      'timestamp' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'Timestamp for when this record was inserted.',
+      ),
+    ),
+    'primary key' => array('gavin_id'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Create the cr_donate_giftaid_cancel table.
+ */
+function cr_donate_update_7001() {
+  $cr_donate_giftaid_cancel = array(
+    'description' => 'Holds data related to giftaid cancellation requests.',
+    'fields' => array(
+      'gavin_id' => array(
+        'description' => 'The GAVIN id of the giftaid record being cancelled',
+        'type' => 'varchar',
+        'length' => 20, // matches max length in GAVIN database.
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'email' => array(
+        'type' => 'varchar',
+        'length' => 254,
+        'not null' => FALSE,
+        'default' => '',
+        'description' => "User's e-mail address.",
+      ),
+      'timestamp' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'Timestamp for when this record was inserted.',
+      ),
+    ),
+    'primary key' => array('gavin_id'),
+  );
+
+  db_create_table(
+    'cr_donate_giftaid_cancel',
+    $cr_donate_giftaid_cancel
+  );
+}

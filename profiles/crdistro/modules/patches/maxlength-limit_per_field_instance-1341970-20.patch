@@ -1,0 +1,56 @@
+diff --git a/maxlength.module b/maxlength.module
+index 1ab91fe..28239b4 100644
+--- a/maxlength.module
++++ b/maxlength.module
+@@ -47,8 +47,8 @@ function maxlength_element_info_alter(&$cache) {
+  * Pre render function to set maxlength attributes.
+  */
+ function maxlength_pre_render($element) {
+-  if (((isset($element['#maxlength']) && $element['#maxlength'] > 0) ||(isset($element['#attributes']['maxlength']) && $element['#attributes']['maxlength'] > 0)) &&
+-        isset($element['#maxlength_js']) && $element['#maxlength_js'] === TRUE) {
++  if (((isset($element['#maxlength']) && $element['#maxlength'] > 0) || (isset($element['#attributes']['maxlength']) && $element['#attributes']['maxlength'] > 0)) &&
++      isset($element['#maxlength_js']) && $element['#maxlength_js'] === TRUE) {
+     if ($element['#type'] == 'textarea' && !isset($element['#attributes']['maxlength'])) {
+       $element['#attributes']['maxlength'] = $element['#maxlength'];
+     }
+@@ -111,9 +111,9 @@ function maxlength_form_field_ui_field_edit_form_alter(&$form, &$form_state, $fo
+   $fields = array('text_textfield');
+   if (in_array($form['#instance']['widget']['type'], $fields)) {
+     $form['instance']['widget']['settings']['maxlength_js'] = array(
+-      '#type' => 'checkbox',
++      '#type' => 'textfield',
+       '#title' => 'Maxlength JS',
+-      '#description' => t('Limit the maximum length of the field in characters using the "<strong>Maximum length</strong>" value set in the <strong>field settings</strong> using Javascript.'),
++      '#description' => t('The maximum length of the field in characters.'),
+       '#default_value' => isset($form['#instance']['widget']['settings']['maxlength_js']) ? $form['#instance']['widget']['settings']['maxlength_js'] : NULL,
+     );
+   }
+@@ -186,8 +186,7 @@ function _maxlength_children(&$element, $ms_elements) {
+         }
+       }
+ 
+-      if (isset($element[$child]['summary']) && isset($settings['maxlength_js_summary'])
+-        && $settings['maxlength_js_summary'] > 0) {
++      if (isset($element[$child]['summary']) && isset($settings['maxlength_js_summary']) && $settings['maxlength_js_summary'] > 0) {
+         _maxlength_add_maxlength_attributes($element[$child]['summary'], $settings, '_summary');
+       }
+     }
+@@ -199,7 +198,12 @@ function _maxlength_children(&$element, $ms_elements) {
+  * Add maxlength attributes.
+  */
+ function _maxlength_add_maxlength_attributes(&$element, $settings, $suffix = '') {
+-  $element['#maxlength'] = isset($element['#maxlength']) ? $element['#maxlength'] : $settings['maxlength_js' . $suffix];
++  if (isset($element['#maxlength']) && isset($settings['maxlength_js' . $suffix])) {
++    $element['#maxlength'] = $settings['maxlength_js' . $suffix];
++  }
++  else {
++    $element['#maxlength'] = isset($element['#maxlength']) ? $element['#maxlength'] : $settings['maxlength_js' . $suffix];
++  }
+   $element['#maxlength_js'] = TRUE;
+ 
+   $maxlength_js_label = !empty($settings['maxlength_js_label']) ? $settings['maxlength_js_label' . $suffix] : MAXLENGTH_DEFAULT_JS_LABEL;
+@@ -299,3 +303,4 @@ function maxlength_node_title_validate($element, &$form_state, $form) {
+     form_error($element, t('Note titles can be maximum 255 characters long.'));
+   }
+ }
++

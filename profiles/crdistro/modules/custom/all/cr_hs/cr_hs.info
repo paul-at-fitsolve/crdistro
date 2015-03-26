@@ -1,0 +1,10 @@
+name = High Scores
+description = Provides Service endpoint to capture high scores submissions
+core = "7.x"
+package = "Comic Relief"
+version = "7.x-1.01"
+;files[] = 
+dependencies[] = cr_fg_services
+dependencies[] = entity
+dependencies[] = number
+dependencies[] = text

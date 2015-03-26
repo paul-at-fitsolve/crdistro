@@ -1,0 +1,16 @@
+<?php
+
+/**
+ * Implementation of hook_requirements().
+ */
+function cr_webservices_requirements($phase) {
+  if ($phase == 'runtime') {
+    $service = wsclient_service_load('cr_marketing_preferences');
+    $items['cr_webservices_base_url'] = array(
+      'title' => 'Comic Relief web services URL',
+      //'value' => $service->url,
+      'value' => cr_webservices_base_url(),
+    );
+    return $items;
+  }
+}

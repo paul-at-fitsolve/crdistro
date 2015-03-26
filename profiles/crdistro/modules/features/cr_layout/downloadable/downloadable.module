@@ -1,0 +1,627 @@
+<?php
+/**
+ * @file
+ * Code for the Downloadable feature.
+ */
+
+include_once 'downloadable.features.inc';
+
+/**
+ * Implements hook_entity_info().
+ */
+function downloadable_entity_info() {
+
+  $return = array(
+    'downloadable' => array(
+      'label' => t('Downloadable'),
+      'plural label' => t('Downloadables'),
+      'entity class' => 'Entity',
+      'controller class' => 'EntityAPIControllerExportable',
+      // So that Views can access it
+      'views controller class' => 'EntityDefaultViewsController',
+      'base table' => 'downloadable',
+      'fieldable' => TRUE,
+      'exportable' => FALSE,
+      'entity keys' => array(
+        // So that external code can easily grab this info (key => db field)
+        // e.g. EntityReference module
+        'id' => 'id',
+        'name' => 'name',
+        'label' => 'label'
+      ),
+      'module' => 'downloadable',
+      'access callback' => 'downloadable_access',
+      // Enable the entity API's admin UI.
+      'admin ui' => array(
+        'path' => 'admin/structure/downloadable',
+        'file' => 'downloadable.admin.inc',
+      ),
+      'bundles' => array(
+        'downloadable' => array(
+          'label' => t('Downloadable'),
+          'admin' => array(
+            'path' => 'admin/structure/downloadable/field',
+            'access arguments' => array('administer downloadable'),
+          ),
+        ),
+      ),
+      'view modes' => array(
+        'search_result' => array(
+          'label' => t('Search Result'),
+          'custom settings' => TRUE,
+        ),
+      ),
+    ),
+  );
+
+  return $return;
+}
+
+/**
+ * Access callback for the entity API.
+ *
+ * @param $op
+ *   The operation being performed. One of 'view', 'update', 'create', 'delete'
+ *   or just 'edit' (being the same as 'create' or 'update').
+ * @param $profile
+ *   (optional) A profile to check access for. If nothing is given, access for
+ *   all profiles is determined.
+ * @param $account
+ *   (optional) The user to check for. Leave it to NULL to check for the global user.
+ *
+ * @return boolean
+ *   Whether access is allowed or not.
+ */
+function downloadable_permission() {
+  return array(
+    'administer downloadable' => array(
+      'title' => t('Administer downloadable Entities'),
+    ),
+  );
+}
+function downloadable_access($op, $profile = NULL, $account = NULL) {
+  if (user_access('administer downloadable', $account)) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Implements hook_token_info()
+ */
+function downloadable_token_info() {
+
+  // Token keys
+  $types['dl'] = array(
+    'name' => t("Downloadable"),
+    'description' => t("Tokens which resolve into downloadable info"),
+  );
+
+  // Tokens
+  $downloadable['type'] = array(
+    'name' => t("The downloadable type"),
+    'description' => t("The downloadable type. For files this is the extension. For links this is empty."),
+  );
+
+  $downloadable['size'] = array(
+    'name' => t("The downloadable size"),
+    'description' => t("The downloadable size. Resolves to the most human readable size e.g. '321 KB' or '6.5 MB'."),
+  );
+
+  $downloadable['render'] = array(
+    'name' => t("Render the downloadable"),
+    'description' => t("@todo"),
+  );
+
+  $downloadable['link'] = array(
+    'name' => t("Render the downloadable as a link"),
+    'description' => t("@todo"),
+  );
+
+  $downloadable['cta'] = array(
+    'name' => t("Render the downloadable as a cta"),
+    'description' => t("@todo"),
+  );
+
+  $downloadable['url'] = array(
+    'name' => t("Render the downloadables url only"),
+    'description' => t("@todo"),
+  );
+
+  $downloadable['button'] = array(
+    'name' => t("Render the downloadable as a button"),
+    'description' => t("@todo"),
+  );
+
+  return array(
+    'types' => $types,
+    'tokens' => array(
+      'dl' => $downloadable,
+    ),
+  );
+}
+
+/**
+ * Implements hook_tokens(). This hook will operate the token and replace it with its value.
+ *
+ * Tokens should be added to content using their type prefix, Eg) [dl:token_name]
+ */
+function downloadable_tokens($type, $tokens, array $data = array(), array $options = array()) {
+  $replacements = array();
+  $sanitize = !empty($options['sanitize']);
+
+  if($type === 'dl') {
+    foreach($tokens as $name => $original) {
+
+      $tokens = explode(':', $name);
+
+      switch($tokens[0]) {
+        // [dl:type]
+        // [dl:type:uppercase|lowercase|camelcase]
+        case 'type':
+          $replacement_value = isset($data['type']) ? $data['type'] : '';
+
+          // Check for a 2nd param
+          if(isset($tokens[1])) {
+            switch($tokens[1]) {
+              case 'lowercase':
+                $replacement_value = strtolower($replacement_value);
+              break;
+              case 'camelcase':
+                $replacement_value = ucwords($replacement_value);
+              break;
+              case 'uppercase':
+                $replacement_value = strtoupper($replacement_value);
+              break;
+            }
+          }
+          else {
+            $replacement_value = strtoupper($replacement_value);
+          }
+
+          $replacements[$original] = $sanitize ? filter_xss($replacement_value) : $replacement_value;
+        break;
+        // [dl:size]
+        // [dl:size:n] = precision (int)
+        case 'size':
+          $replacement_value = isset($data['size']) ? $data['size'] : '';
+
+          // Check for a 2nd param
+          if(isset($tokens[1]) && ctype_digit($tokens[1])) {
+            $replacement_value = _bytes_to_size_1024($replacement_value, $tokens[1]);
+          }
+          else {
+            $replacement_value = _bytes_to_size_1024($replacement_value, 2);
+          }
+
+          $replacements[$original] = $sanitize ? filter_xss($replacement_value) : $replacement_value;
+        break;
+        // [dl:render:customisable_posters]
+        case 'render':
+          if(!ctype_digit($tokens[1])) {
+            $machine_name = $tokens[1];
+            $replacement_value = _render_downloadable($machine_name);
+
+            if($replacement_value === FALSE) {
+              watchdog('downloadable', 'Render: Could not fetch downloadable with machine name: @machine_name', array('@machine_name' => $machine_name), WATCHDOG_ERROR);
+            }
+            else {
+              $replacements[$original] = filter_xss($replacement_value, array('a', 'img', 'span'));
+            }
+          }
+        break;
+        // Does the same thing as render but ignores attached icon
+        // [dl:link:customisable_posters]
+        case 'link':
+          if(!ctype_digit($tokens[1])) {
+            $machine_name = $tokens[1];
+            $replacement_value = _render_downloadable($machine_name, TRUE, $machine_name);
+
+            if($replacement_value === FALSE) {
+              watchdog('downloadable', 'Render: Could not fetch downloadable with machine name: @machine_name', array('@machine_name' => $machine_name), WATCHDOG_ERROR);
+            }
+            else {
+              $replacements[$original] = $replacement_value;
+            }
+          }
+        break;
+        // Does the same thing as link but adds a cta class
+        // [dl:link:customisable_posters]
+        case 'cta':
+          if(!ctype_digit($tokens[1])) {
+            $machine_name = $tokens[1];
+            $replacement_value = _render_downloadable($machine_name, TRUE, 'cta');
+
+            if($replacement_value === FALSE) {
+              watchdog('downloadable', 'Render: Could not fetch downloadable with machine name: @machine_name', array('@machine_name' => $machine_name), WATCHDOG_ERROR);
+            }
+            else {
+              $replacements[$original] = $replacement_value;
+            }
+          }
+        break;
+        // To give us a bit of flexibility, this simply outputs the url to the file
+        case 'url':
+          if(!ctype_digit($tokens[1])) {
+            $machine_name = $tokens[1];
+            $replacement_value = _render_downloadable($machine_name, TRUE, 'url', TRUE);
+
+            if($replacement_value === FALSE) {
+              watchdog('downloadable', 'Render: Could not fetch downloadable with machine name: @machine_name', array('@machine_name' => $machine_name), WATCHDOG_ERROR);
+            }
+            else {
+              $replacements[$original] = $replacement_value;
+            }
+          }
+        break;
+        // To give us a button style to use
+        case 'button':
+          if(!ctype_digit($tokens[1])) {
+            $machine_name = $tokens[1];
+            $replacement_value = _render_downloadable($machine_name, TRUE, 'button');
+
+            if($replacement_value === FALSE) {
+              watchdog('downloadable', 'Render: Could not fetch downloadable with machine name: @machine_name', array('@machine_name' => $machine_name), WATCHDOG_ERROR);
+            }
+            else {
+              $replacements[$original] = $replacement_value;
+            }
+          }
+        break;
+      }
+    }
+  }
+
+  return $replacements;
+}
+
+/**
+ * Render's out a downloadable from the entities machine name
+ *
+ * @param $machine_name
+ *   The machine name (string)
+ * @param $force_link
+ *   Whether to ignore the icon or not (boolean)
+ * @return
+ *   The renderable HTML of the downloadable
+ */
+if(!function_exists('_render_downloadable')) :
+function _render_downloadable($machine_name, $force_link = FALSE, $link_class = '', $urlonly = FALSE) {
+  $output = '';
+  // Get the id corresponding to the machine name
+  $entity = entity_load_single('downloadable', $machine_name);
+
+  if(!empty($entity)) {
+    $file_uri = $entity->url;
+    $file_type = null;
+    $file_size = null;
+    $cta = $entity->cta;
+    $icon = null;
+
+    // If Url is empty then get the local file info
+    if(empty($file_uri) && $entity->file_upload != 0) {
+      if(($file = file_load($entity->file_upload)) !== FALSE) {
+        $file_uri = $file->uri;
+        $file_type = substr($file->filename, strrpos($file->filename, '.') + 1);
+        $file_size = $file->filesize;
+        if($link_class != ''){
+          $link_class .= ' download';
+        }else{
+          $link_class = 'cta download';
+        }
+      }
+    }
+
+    // Parse the cta for tokens
+    $cta = token_replace($cta, array('type' => $file_type, 'size' => $file_size));
+
+    // Sanitize cta because we can't sanitize the whole token
+    $cta = filter_xss($cta);
+
+    // Check if we have an icon present
+    if($force_link == FALSE && $entity->icon_upload != 0) {
+      $icon = file_load($entity->icon_upload);
+    }
+
+    // Now render out the downloadable
+    $icon_html = !empty($icon) ? '<img src="' . file_create_url($icon->uri) . '" />' : '';
+
+    if($urlonly){
+      $output = file_create_url($file_uri);
+    }else{
+      $output = l(
+        $icon_html.$cta,
+        file_create_url($file_uri),
+        array('html' => TRUE, 'attributes' => array('class' => array("{$link_class}")))
+      );
+    }
+    // Check for 3 slashes. Remove one before returning the link as IE can't handle it
+    $output = preg_replace('/(?<=href=\")(.*\/\/\/)/', '//', $output);
+    return $output;
+  }
+
+  return FALSE;
+}
+endif;
+
+/**
+ * Helper to convert bytes to human readable output
+ */
+if(!function_exists('_bytes_to_size_1024')) :
+function _bytes_to_size_1024($bytes, $precision = 2) {
+    // human readable format -- powers of 1024
+    $unit = array('B','KB','MB','GB','TB','PB','EB');
+
+    return @round(
+        $bytes / pow(1024, ($i = floor(log($bytes, 1024)))), $precision
+    ).' '.$unit[$i];
+}
+endif;
+
+/**
+ * Views field handlers used to control field output
+ */
+class file_upload_views_handler_field extends views_handler_field {
+  function render($values) {
+    $fid = $this->get_value($values);
+
+    // Override path with url field if specified
+    if(!empty($values->downloadable_url)) {
+      return file_create_url($values->downloadable_url);
+    }
+
+    else if(($file = file_load($fid)) !== FALSE) {
+      if(($file_uri = file_create_url($file->uri)) !== FALSE) {
+        return $file_uri;
+      }
+    }
+
+    return '#file_not_found';
+  }
+}
+
+class icon_upload_views_handler_field extends views_handler_field {
+  function render($values) {
+    $fid = $this->get_value($values);
+
+    if(($file = file_load($fid)) !== FALSE) {
+      if(($file_uri = file_create_url($file->uri)) !== FALSE) {
+        return '<img src="'.$file_uri.'" />';
+      }
+    }
+
+    return '';
+  }
+}
+
+class cta_views_handler_field extends views_handler_field {
+  function render($values) {
+
+    $file_type = null;
+    $file_size = null;
+
+    // Try and load local file
+    if(isset($values->downloadable_file_upload)
+      && ($file = file_load($values->downloadable_file_upload)) !== FALSE) {
+      // Get file extension
+      $file_type = substr($file->filename, strrpos($file->filename, '.') + 1);
+
+      // Get file size
+      $file_size = $file->filesize;
+    }
+
+    $value = $this->get_value($values);
+    return token_replace( $this->sanitize_value($value),  array('type' => $file_type, 'size' => $file_size) );
+  }
+}
+
+/**
+ * Assign field handlers for Views
+ */
+function downloadable_views_data_alter(&$data) {
+  $data['downloadable']['file_upload']['field']['handler'] = 'file_upload_views_handler_field';
+  $data['downloadable']['icon_upload']['field']['handler'] = 'icon_upload_views_handler_field';
+  $data['downloadable']['cta']['field']['handler'] = 'cta_views_handler_field';
+}
+
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+// More information on custom formatters can be found at: http://www.metaltoad.com/blog/drupal-7-tutorial-creating-custom-formatters
+function downloadable_field_formatter_info() {
+  $info = array(
+    'downloadable_ctaicons' => array(
+      'label' => t('CR list CTA with icons'),
+      'field types' => array('entityreference'),
+      'description' => t('Display icons upoaded by user and link to downloadable here'),
+      'settings' => array(
+        'cta_field_name' => '',
+        'field_css_class' => '',
+      ),
+    )
+  );
+  return $info;
+}
+
+
+/**
+ * Implements hook_field_formatter_settings_form().
+ */
+function downloadable_field_formatter_settings_form($field, $instance, $view_mode, $form, &$form_state) {
+
+  //This gets the view_mode where our settings are stored
+  $display = $instance['display'][$view_mode];
+  //This gets the actual settings
+  $settings = $display['settings'];
+  //Initialize the element variable
+  $element = array();
+
+  switch($display['type']){
+    case 'downloadable_ctaicons':
+      $element['cta_field_name'] = array(
+        '#type'           => 'textfield',                           // Use a select box widget
+        '#title'          => t('CTA Override'),                   // Widget label
+        '#description'    => t('Select what type of CTA you want to use here'), // Helper text
+        '#default_value'  => (isset($settings['cta_field_name']) ? $settings['cta_field_name'] : 'cta_field_name'),              // Get the value if it's already been set
+      );
+      $element['field_css_class'] = array(
+        '#type'           => 'textfield',                           // Use a select box widget
+        '#title'          => t('Custom CSS Class'),                   // Widget label
+        '#description'    => t('Insert CSS class to be used on "li" element'), // Helper text
+        '#default_value'  => (isset($settings['field_css_class']) ? $settings['field_css_class'] : ''),              // Get the value if it's already been set
+      );
+      break;
+  }
+  return $element;
+}
+
+
+/**
+ * Implements hook_field_formatter_settings_summary().
+ */
+function downloadable_field_formatter_settings_summary($field, $instance, $view_mode) {
+  $display = $instance['display'][$view_mode];
+  $settings = $display['settings'];
+  $summary = t('CTA pattern : @pattern | CSS class: @css_class', array(
+    '@pattern' => (!empty($settings['cta_field_name']) ? $settings['cta_field_name'] : 'none'),
+    '@css_class' => (!empty($settings['field_css_class']) ? $settings['field_css_class'] : 'none'),
+  ));
+  return $summary;
+}
+
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function downloadable_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array(); // Initialize the var
+  $settings = $display['settings']; // get the settings
+
+  // url (String, 0 characters )
+  $options = array(
+    'html'        => TRUE, // This tells Drupal that we're sending HTML, not plain text, otherwise it would encode it
+    'attributes'  => array(
+    ),
+  );
+
+  switch($display['type']){
+    case 'downloadable_ctaicons':
+      if($display['module'] !== "downloadable"){
+        // Let user know that this formatter should only  be used on downloadable reference.
+      }
+      // Get referenced ids of Downloadbles
+      foreach($items as $item){
+        $target_ids[] = $item['target_id'];
+      }
+      // Load Downloadable entity
+      $downloadable_entities = entity_load("downloadable",$target_ids);
+      $output = array();
+      // Foreach load files
+      foreach($downloadable_entities as $downloadable_entity){
+        // Check if we have an icon present
+        if($downloadable_entity->icon_upload != 0) {
+          // Load file
+          $file = file_load($downloadable_entity->file_upload);
+
+          $row_class = strtolower(str_replace('_', '-', $downloadable_entity->name)) . ' download-link';
+
+          $title = t($downloadable_entity->label);
+          $cta_title = t($downloadable_entity->cta);
+
+          if($file) {
+            $file_name = $file->filename;
+            $filetype = strtoupper(substr(strrchr($file_name,'.'), 1));
+          }else {
+            $filetype = '';
+          }
+
+          // if there's an uploaded file get the url of it..
+          // else use the url field, titled 'Otherwise enter a link (url)' on the downloadable form
+          if($file != '') {
+            $link_url = file_create_url($file->uri);
+          }else {
+            $link_url = $downloadable_entity->url;
+          }
+
+          $icon = file_load(check_url($downloadable_entity->icon_upload));
+
+          //Formatter override if settings array has been set
+          if(isset($settings['cta_field_name']) && !empty($settings['cta_field_name'])) {
+            $cta_title = token_replace($settings['cta_field_name']);
+          }
+
+          $icon_attr = drupal_attributes(array('alt' => t('icon @iconname',array('@iconname'=>$downloadable_entity->name))));
+          $icon_image = "<img src='"  . file_create_url($icon->uri) . "' class='icon--downloadable' " . $icon_attr ."/>";
+
+          // Set the html for output
+          $list_item = array('data' => theme('downloadable_ctaicons',array(
+            'title' => $title,
+            'text' => (isset($downloadable_entity) ? drupal_render($downloadable_entity->field_body) : ""),
+            'cta' => $cta_title,
+            'link_url' => $link_url,
+            'link_class' => $row_class,
+            'filetype' => $filetype,
+            'downloadable' => $downloadable_entity,
+            'icon' => $icon_image)
+          ));
+
+          //Add custom class if present
+          if(isset($settings['field_css_class']) && !empty($settings['field_css_class'])){
+            $custom_css_class = check_plain($settings['field_css_class']);
+            $custom_css_class = strtolower($custom_css_class);
+            $list_item += array('class' => array($custom_css_class));
+          }
+
+          $list_items[] = $list_item;
+
+        } else {
+          // No icon, direct user to edit downloadable
+          $link_options = array(
+            'query' => drupal_get_destination(),
+            'html' => TRUE,
+          );
+          drupal_set_message(
+            t("No icon to be displayed because you need to upload one. !edit if you want to add one",
+            array(
+              '!edit'=>l('Edit this downloadable','admin/structure/downloadable/manage/' . check_plain($downloadable_entity->name),
+              $link_options))),
+            'warning'
+          );
+        }
+      }
+      $element[0]['#markup'] = theme('item_list', array('items' => $list_items));
+
+      return $element;
+      break;
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function downloadable_theme(){
+  return array(
+    'downloadable_ctaicons' => array(
+      'variables' => array(
+        'filetype' => NULL,
+        'title' => NULL,
+        'link_url' => NULL,
+        'link_class' => NULL,
+        'text'=> NULL,
+        'cta' => NULL,
+        'downloadable' => NULL,
+        'icon' => NULL),
+      'template' => 'downloadable_ctaicons',
+    )
+  );
+}
+
+function downloadable_preprocess_entity(&$variables, $hook) {
+  if($variables['entity_type'] == 'downloadable') {
+    $variables['url'] = $variables['elements']['#entity']->url;
+    $variables['title'] = $variables['elements']['#entity']->label;
+    $variables['cta'] = $variables['elements']['#entity']->cta;
+  }
+}
+

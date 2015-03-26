@@ -1,0 +1,5 @@
+name = CR Tracking DataTalk
+description = Provides a 1x1 Tracking Pixel for DataTalk reporting.
+package = "CR"
+core = 7.x
+version = "7.x-0.01"

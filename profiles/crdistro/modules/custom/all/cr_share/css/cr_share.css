@@ -1,0 +1,88 @@
+.share-title {
+  float: left;
+  font-size: 13px;
+  line-height: 20px;
+  padding-right: 10px;
+  text-transform: none;
+  margin: 0;
+  color:#363636;
+}
+.facebook-share, .twitter-share, .googleplus-one {
+  background-image: url(images/share_icons.gif);
+  text-indent:-9999px;
+  white-space: nowrap;
+}
+.facebook-share {
+  background-position:0 0;
+  display:block;
+  height: 20px;
+  width: 55px;
+}
+
+.twitter-share {
+  background-position:-60px 0;
+  display:block;
+  height: 20px;
+  width: 56px;
+}
+
+.googleplus-one {
+  background-position:-120px 0;
+  display:block;
+  height: 20px;
+  width: 51px;
+}
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .facebook-share, .twitter-share, .googleplus-one {
+    background-image: url(images/share_icons@2x.gif);
+    background-size: 156px 19px;
+    height:19px;
+  }
+  .facebook-share {
+    width:53px;
+  }
+  .twitter-share {
+    background-position: -55px 0;
+    width:52px;
+  }
+  .googleplus-one {
+    background-position: -109px 0;
+    width:47px;
+  }
+}
+.socialite-loaded {
+  background-image: none;
+  height: 100%;
+  text-indent:0px;
+}
+
+.socialite-item {
+  height: 20px;
+}
+.socialite-item .fb_iframe_widget > span {
+  vertical-align: top !important;
+}
+.socialitejs.layout0 {
+  display: block;
+    list-style: none outside none;
+    margin: 10px;
+    padding: 10px;
+}
+
+.socialitejs.layout0 > li {
+  display: block;
+    margin: 0;
+}
+
+.socialitejs.layout1 {
+  display: block;
+    list-style: none outside none;
+    margin: 10px 20px 20px;
+    padding: 0;
+}
+
+.socialitejs.layout1 > li {
+  display: inline-block;
+    margin: 0;
+    padding: 10px;
+}

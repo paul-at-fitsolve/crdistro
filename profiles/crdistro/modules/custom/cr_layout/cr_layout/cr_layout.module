@@ -1,0 +1,118 @@
+<?php
+
+/**
+ * implementation of HOOK_panels_new_pane
+ *
+ * This hook function was added via a patch
+ */
+function cr_layout_panels_new_pane_alter(&$pane){
+  // Set our custom style as the default pane style
+  $pane->style['style'] = 'panelayout';
+  $pane->style['settings'] = array();
+}
+
+/**
+ * implementation of HOOK_admin_paths
+ *
+ */
+function cr_layout_admin_paths() {
+  $paths = array(
+    'panels/ajax/*' => TRUE,
+  );
+  return $paths;
+}
+
+/**
+ * Implementation of hook_form_FORM_ID_alter().
+ *
+ * Provides customization to panel pane style form
+ * Shamelessly borrowed from Panopoly magic https://drupal.org/project/panopoly_magic
+ */
+function cr_layout_form_panels_edit_style_type_form_alter(&$form, &$form_state, $form_id) {
+
+    unset($form['style']['#options']['block']);
+    unset($form['style']['#options']['rounded_corners']);
+
+  // Better explain that "No Style" means "Default Pane Style"
+  // Move the default option to the top. Also I should have learned
+  // how to manage arrays in PHP.
+  if (!empty($form['style']['#options']['default'])) {
+    $form['style']['#options']['default'] = t('Default Pane Style');
+    $default = $form['style']['#options']['default'];
+    unset($form['style']['#options']['default']);
+    $form['style']['#options'] = array_reverse($form['style']['#options']);
+    $form['style']['#options']['default'] = $default;
+    $form['style']['#options'] = array_reverse($form['style']['#options']);
+  }
+
+  // Better title for the List Style region style plugin
+  if (!empty($form['style']['#options']['list'])) {
+    $form['style']['#options']['list'] = t('List Style');
+  }
+
+  // Improve the UI around region style selections
+  if (!empty($form['style']['#options'][0])) {
+    $form['style']['#options'][0] = t('Default Region Style');
+    if (empty($form['style']['#default_value']) || $form['style']['#default_value'] == '-1') {
+      $form['style']['#default_value'] = '0';
+    }
+    unset($form['style']['#options']['default']);
+  }
+
+  // Move custom style option to bottom of list.
+  if (!empty($form['style']['style']['#options']['stylizer'])) {
+    unset($form['style']['style']['#options']['stylizer']);
+    $form['style']['style']['#options']['stylizer'] = t('Custom Style');
+  }
+
+}
+
+/**
+ * Implementation of hook_form_FORM_ID_alter()
+ */
+function cr_layout_form_fieldable_panels_panes_fieldable_panels_pane_content_type_edit_form_alter(&$form, &$form_state, $form_id) {
+  // Customize the view mode setting
+  if (!empty($form['view_mode'])) {
+    unset($form['view_mode']['#options']['token']);
+    if (count($form['view_mode']['#options']) < 2) {
+      $form['view_mode']['#type'] = 'value';
+      $form['view_mode']['#value'] = reset($form['view_mode']['#options']);
+    }
+    $form['widget_settings']['view_mode'] = $form['view_mode'];
+    unset($form['view_mode']);
+  }
+
+  // Improving the general title setting
+  if (!empty($form['widget_settings']['title'])) {
+    $form['widget_settings']['title']['#size'] = '';
+  }
+
+  // Improving the link Options
+  if (!empty($form['widget_settings']['link'])) {
+    $form['widget_settings']['link']['path']['#size'] = '';
+    $form['widget_settings']['link']['path']['#field_prefix'] =  $form['widget_settings']['link']['path']['#title'];
+    $form['widget_settings']['link']['path']['#title'] = '';
+    $form['widget_settings']['link']['path']['#description'] = t('The URL or Drupal path from which to build the link.');
+    $form['widget_settings']['link']['link']['#description'] = '';
+  }
+
+  // Move the reusable option to the general settings
+  if (!empty($form['reusable'])) {
+    $form['reusable']['#type'] = '';
+    $form['reusable']['#title'] = '';
+    $form['reusable']['reusable']['#title'] = t('Make this reusable');
+    $form['reusable']['admin_title']['#field_prefix'] = t('Admin Title');
+    $form['reusable']['admin_title']['#title'] = '';
+    $form['reusable']['admin_title']['#size'] = '';
+    $form['reusable']['admin_title']['#description'] = '';
+    $form['widget_settings']['reusable'] = $form['reusable'];
+    unset($form['reusable']);
+  }
+
+  unset($form['link']);
+  // $form['hide_title'] = array(
+  //   '#type' => 'checkbox',
+  //   '#title' => t('Hide Title'),
+  //   '#weight' => '-10',
+  // );
+}

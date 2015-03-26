@@ -1,0 +1,37 @@
+.cr-donate-logo {
+  background: url(images/logos.png) 0 0 no-repeat;
+  display: block;
+  text-indent: -9999px;
+}
+
+.cr-donate-logo-caf {
+  background-position: 0 0;
+  height: 60px;
+}
+
+.cr-donate-logo-frsb {
+  background-position: 0 -70px;
+  width: 150px;
+  height: 74px;
+}
+
+.cr-donate-logo-worldpay {
+  background-position: 0 -160px;
+  width: 109px;
+  height: 62px;
+}
+
+.cr-donate-logo-digicert {
+  background-position: 0 -232px;
+  width: 106px;
+  height: 70px;
+}
+
+.button-paypal {
+  background: url(images/btn_donate_with_pp.png) no-repeat;
+  border: none;
+  cursor: pointer;
+  width: 142px;
+  height: 27px;
+  text-indent: -9999px;
+}
